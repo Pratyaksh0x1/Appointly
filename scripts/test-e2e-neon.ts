@@ -10,8 +10,8 @@
 
 import http from 'http';
 import dotenv from 'dotenv';
-import { createServer } from '../src/index.js';
-import { getDatabaseClient } from '../src/db/index.js';
+import { createServer } from '../apps/api/src/index.js';
+import { getDatabaseClient } from '../apps/api/src/db/index.js';
 
 dotenv.config();
 
@@ -117,9 +117,13 @@ async function runE2ETest() {
 
     // Test 5: NON-NEGOTIABLE RULE 2 - Double Booking Prevention on Neon
     console.log('7. Testing Double-Booking Prevention on Neon (Booking same slot again)...');
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const bookedDate = tomorrow.toISOString().slice(0, 10);
+
     const duplicateAttempt = await db.bookAppointment({
       doctorId: 'dr_sharma',
-      date: '2026-11-10', // Date used in mock booking
+      date: bookedDate,
       startTime: '09:30',
       patientName: 'Second Patient',
       patientPhone: '9123456789',

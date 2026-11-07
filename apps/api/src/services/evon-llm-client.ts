@@ -182,6 +182,11 @@ export class EvonLLMClient implements ILLMClient {
 
     // Intent 1: Booking request -> Trigger book_appointment tool
     if (lastUserMessage.includes('book') || lastUserMessage.includes('appointment')) {
+      // Pick a date from user message or default to tomorrow
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const bookingDate = tomorrow.toISOString().slice(0, 10);
+
       const toolCall: ToolCall = {
         id: `call_${Date.now()}_book`,
         type: 'function',
@@ -189,7 +194,7 @@ export class EvonLLMClient implements ILLMClient {
           name: 'book_appointment',
           arguments: JSON.stringify({
             doctorId: 'dr_sharma',
-            date: '2026-11-10',
+            date: bookingDate,
             startTime: '09:30',
             patientName: 'Rohan Sharma',
             patientPhone: '9876543210',
