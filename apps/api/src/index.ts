@@ -534,10 +534,17 @@ export function createServer() {
         return;
       }
 
-      // 6. Appointments listing (Protected: requires doctor auth)
+      // 6. Appointments listing (Protected: requires doctor auth & completed onboarding)
       if (req.method === 'GET' && pathname === '/api/appointments') {
         const authDoctor = requireDoctorAuth(req, res);
         if (!authDoctor) return;
+
+        const profile = db.getClinicProfile ? await db.getClinicProfile() : null;
+        if (profile && !profile.onboardingCompleted && !profile.clinicName) {
+          res.writeHead(403, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'ONBOARDING_REQUIRED', message: 'Clinic setup form must be completed first.' }));
+          return;
+        }
 
         const doctorId = parsedUrl.searchParams.get('doctorId') || undefined;
         const date = parsedUrl.searchParams.get('date') || undefined;

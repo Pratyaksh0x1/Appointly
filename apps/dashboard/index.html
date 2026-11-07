@@ -639,7 +639,7 @@
         <!-- Logged In Doctor Profile Chip -->
         <div id="doctorNavChip" style="display: none; align-items: center; gap: 8px;">
           <span id="navDocName" style="font-weight: 700; font-size: 0.85rem;">Doctor</span>
-          <button class="btn btn-outline" style="padding: 6px 12px;" onclick="navigateTo('dashboard', 'settings')">
+          <button id="navSettingsBtn" class="btn btn-outline" style="padding: 6px 12px; display: none;" onclick="navigateTo('dashboard', 'settings')">
             ⚙️ Settings
           </button>
           <button class="btn btn-outline" style="padding: 6px 12px;" onclick="logout()">
@@ -996,8 +996,18 @@
         return token ? { Authorization: `Bearer ${token}` } : {};
       }
 
+      function isClinicOnboarded() {
+        return Boolean(cachedProfile && (cachedProfile.onboardingCompleted || cachedProfile.clinicName));
+      }
+
       // App Navigation
       function navigateTo(viewId, subTab) {
+        // Enforce strictly that form filling is mandatory before accessing schedule or settings
+        if (viewId === 'dashboard' && !isClinicOnboarded()) {
+          alert('⚠️ Please complete the initial clinic & doctor setup form first before accessing the dashboard or schedule.');
+          viewId = 'onboarding';
+        }
+
         document.querySelectorAll('.app-view').forEach((v) => v.classList.remove('active'));
         const target = document.getElementById(
           viewId === 'home'
@@ -1021,6 +1031,12 @@
       }
 
       function switchDashTab(tab) {
+        if (!isClinicOnboarded()) {
+          alert('⚠️ Please complete the initial clinic & doctor setup form first.');
+          navigateTo('onboarding');
+          return;
+        }
+
         const schedTab = document.getElementById('dashTabContentSchedule');
         const setTab = document.getElementById('dashTabContentSettings');
         const btnSched = document.getElementById('tabBtnSchedule');
@@ -1193,6 +1209,10 @@
         document.getElementById('navLoginBtn').style.display = 'none';
         if (currentDoctor) {
           document.getElementById('navDocName').textContent = currentDoctor.name;
+        }
+        const settingsBtn = document.getElementById('navSettingsBtn');
+        if (settingsBtn) {
+          settingsBtn.style.display = isClinicOnboarded() ? 'inline-flex' : 'none';
         }
         if (cachedProfile && cachedProfile.clinicName) {
           document.getElementById('navBrandSubtitle').textContent = cachedProfile.clinicName;
