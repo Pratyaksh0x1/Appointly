@@ -9,6 +9,30 @@ Appointly is an empathetic, multilingual voice assistant designed for small clin
 
 ---
 
+## Phase 3: Gnani Adapters, Resilience & Cost Metering Highlights
+
+- **Complete Gnani API & Evon Documentation**:
+  - Detailed endpoints, authentication, streaming protocols, audio specs, and credits in [`docs/gnani-notes.md`](docs/gnani-notes.md).
+  - Production GPU sizing, vLLM / OpenAI-compatible hosting, and Docker setup for Evon 30B in [`docs/evon-hosting.md`](docs/evon-hosting.md).
+- **Provider-Agnostic Model Interfaces**:
+  - `SttProvider`: audio buffer / stream $\rightarrow$ partial & final transcripts with confidence scores.
+  - `TtsProvider`: text $\rightarrow$ 16kHz PCM WAV audio buffer and async streaming chunks.
+  - `LlmProvider`: messages + tools $\rightarrow$ conversational response and validated tool calls.
+- **Dual Adapter Architecture (In-Memory Mock + Production Gnani)**:
+  - `MockSttAdapter`, `MockTtsAdapter`, `MockLlmAdapter`: Zero-credit in-memory mock adapters active by default for test & local dev.
+  - `GnaniSttAdapter`, `GnaniTtsAdapter`, `EvonOpenAiLlmAdapter`: Production adapters connecting to `api.vachana.ai` and OpenAI-compatible Evon endpoints.
+- **Circuit Breaker Pattern**:
+  - State machine (`CLOSED`, `OPEN`, `HALF_OPEN`) tracking consecutive failures per service.
+  - Automatically trips after 3 failures to fast-fail subsequent requests and protect credit budget during outages.
+- **Idempotency-Aware Bounded Retries**:
+  - **NON-NEGOTIABLE RULE**: Exponential backoff with jitter applied **strictly to idempotent calls only** (STT/TTS/read queries); non-idempotent operations (such as booking commits) execute with **0 retries** to prevent double mutation.
+- **Per-Call & Daily Cost Metering**:
+  - Tracks and enforces 50 credits/call, 2,000 credits/day, and 5,000 total budget caps. Emits structured JSON audit logs.
+- **End-to-End Voice Pipeline Smoke Test**:
+  - Run via `npm run smoke:voice`: sends a live Hinglish sentence through STT $\rightarrow$ LLM $\rightarrow$ TTS, and outputs step-by-step latency & credit reports.
+
+---
+
 ## Phase 2: Database and Booking Core Highlights
 
 - **8 Relational Tables on PostgreSQL (Drizzle ORM & SQL Migrations)**:

@@ -18,6 +18,8 @@
     "dev": "npm run dev --workspace=@appointly/api",
     "start": "npm run start --workspace=@appointly/api",
     "migrate": "tsx scripts/migrate.ts",
+    "seed": "tsx scripts/seed.ts",
+    "smoke:voice": "tsx scripts/smoke-voice-pipeline.ts",
     "audit": "npm audit --audit-level=high"
   },
   "keywords": [

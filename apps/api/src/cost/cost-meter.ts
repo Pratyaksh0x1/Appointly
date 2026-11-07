@@ -1,35 +1,34 @@
 /**
  * Cost Meter & Credit Budget Limiter
  * Enforces per-call and daily credit caps against the 5,000 API credit budget.
- * Tracks usage across Gnani Prisma (STT), Gnani Timbre (TTS), and Evon 30B (LLM).
+ * Configurable credit rates for Prisma (STT), Timbre (TTS), and Evon 30B (LLM).
+ * Strictly non-negotiable: Fail-fast before external invocation.
  */
 
 import { AiServiceType, CreditUsageRecord } from '../types/index.js';
 import { rootLogger } from '../logger/logger.js';
+import { CreditLimitExceededError } from '../adapters/errors.js';
 
-export class CreditLimitExceededError extends Error {
-  public reason: 'PER_CALL_EXCEEDED' | 'DAILY_EXCEEDED' | 'TOTAL_BUDGET_EXCEEDED';
+export { CreditLimitExceededError };
 
-  constructor(
-    reason: 'PER_CALL_EXCEEDED' | 'DAILY_EXCEEDED' | 'TOTAL_BUDGET_EXCEEDED',
-    message: string
-  ) {
-    super(message);
-    this.name = 'CreditLimitExceededError';
-    this.reason = reason;
-  }
+export interface CostMeterRates {
+  sttRatePerSec: number; // default: 0.10 credits / second
+  ttsRatePerChar: number; // default: 0.005 credits / char (1 credit per 200 chars)
+  llmRatePerToken: number; // default: 0.001 credits / token
 }
 
 export interface CostMeterConfig {
-  totalBudget: number; // e.g. 5000
-  perCallLimit: number; // e.g. 50
-  dailyLimit: number; // e.g. 2000
+  totalBudget?: number; // default: 5000
+  perCallLimit?: number; // default: 50
+  dailyLimit?: number; // default: 2000
+  rates?: Partial<CostMeterRates>;
 }
 
 export class CostMeter {
   private totalBudget: number;
   private perCallLimit: number;
   private dailyLimit: number;
+  private rates: CostMeterRates;
 
   private totalSpent = 0;
   private dailySpent = 0;
@@ -37,10 +36,15 @@ export class CostMeter {
   private callSpendMap: Map<string, number> = new Map();
   private auditRecords: CreditUsageRecord[] = [];
 
-  constructor(config: CostMeterConfig = { totalBudget: 5000, perCallLimit: 50, dailyLimit: 2000 }) {
-    this.totalBudget = config.totalBudget;
-    this.perCallLimit = config.perCallLimit;
-    this.dailyLimit = config.dailyLimit;
+  constructor(config: CostMeterConfig = {}) {
+    this.totalBudget = config.totalBudget ?? 5000;
+    this.perCallLimit = config.perCallLimit ?? 50;
+    this.dailyLimit = config.dailyLimit ?? 2000;
+    this.rates = {
+      sttRatePerSec: config.rates?.sttRatePerSec ?? 0.1,
+      ttsRatePerChar: config.rates?.ttsRatePerChar ?? 0.005,
+      llmRatePerToken: config.rates?.llmRatePerToken ?? 0.001,
+    };
     this.lastResetDate = new Date().toISOString().slice(0, 10);
   }
 
@@ -53,26 +57,23 @@ export class CostMeter {
   }
 
   /**
-   * Estimate credit burn rate:
-   * - PRISMA_STT: 0.1 credit per second (1 credit / 10s)
-   * - TIMBRE_TTS: 0.005 credit per character (0.5 credit / 100 chars)
-   * - EVON_LLM: 0.001 credit per token (1 credit / 1k tokens)
+   * Estimates credit consumption based on service type and consumed units.
    */
   public estimateCredits(service: AiServiceType, units: number): number {
     switch (service) {
       case 'PRISMA_STT':
-        return Math.max(0.05, Math.round(units * 0.1 * 100) / 100);
+        return Math.max(0.01, Math.round(units * this.rates.sttRatePerSec * 100) / 100);
       case 'TIMBRE_TTS':
-        return Math.max(0.05, Math.round(units * 0.005 * 100) / 100);
+        return Math.max(0.01, Math.round(units * this.rates.ttsRatePerChar * 1000) / 1000);
       case 'EVON_LLM':
-        return Math.max(0.05, Math.round(units * 0.001 * 100) / 100);
+        return Math.max(0.01, Math.round(units * this.rates.llmRatePerToken * 1000) / 1000);
       default:
         return 0.1;
     }
   }
 
   /**
-   * Pre-flight credit check before triggering any external API call
+   * Pre-flight credit check before executing any external API call.
    */
   public checkCanSpend(callId: string, estimatedCredits: number): void {
     this.checkDailyReset();
@@ -81,28 +82,34 @@ export class CostMeter {
 
     if (currentCallSpend + estimatedCredits > this.perCallLimit) {
       throw new CreditLimitExceededError(
-        'PER_CALL_EXCEEDED',
-        `Per-call credit limit of ${this.perCallLimit} exceeded. Current: ${currentCallSpend.toFixed(2)}, Requested: ${estimatedCredits.toFixed(2)}`
+        'PER_CALL',
+        currentCallSpend + estimatedCredits,
+        this.perCallLimit,
+        callId
       );
     }
 
     if (this.dailySpent + estimatedCredits > this.dailyLimit) {
       throw new CreditLimitExceededError(
-        'DAILY_EXCEEDED',
-        `Daily credit limit of ${this.dailyLimit} exceeded. Today's usage: ${this.dailySpent.toFixed(2)}, Requested: ${estimatedCredits.toFixed(2)}`
+        'PER_DAY',
+        this.dailySpent + estimatedCredits,
+        this.dailyLimit,
+        callId
       );
     }
 
     if (this.totalSpent + estimatedCredits > this.totalBudget) {
       throw new CreditLimitExceededError(
-        'TOTAL_BUDGET_EXCEEDED',
-        `Total credit budget of ${this.totalBudget} exhausted! Spent: ${this.totalSpent.toFixed(2)}, Requested: ${estimatedCredits.toFixed(2)}`
+        'TOTAL_BUDGET',
+        this.totalSpent + estimatedCredits,
+        this.totalBudget,
+        callId
       );
     }
   }
 
   /**
-   * Records completed spend in memory and audit log
+   * Records completed spend in memory and emits structured audit log.
    */
   public recordSpend(
     callId: string,
@@ -153,6 +160,7 @@ export class CostMeter {
       dailySpent: Math.round(this.dailySpent * 100) / 100,
       perCallLimit: this.perCallLimit,
       totalTransactions: this.auditRecords.length,
+      rates: { ...this.rates },
     };
   }
 
