@@ -16,6 +16,10 @@ import { checkEmergency, EMERGENCY_ESCALATION_HINGLISH } from './safety/emergenc
 import { EvonLLMClient, ToolDefinition, ChatMessage } from './services/evon-llm-client.js';
 import { GnaniTTSClient } from './services/tts-client.js';
 import { doctorScheduleUpdateSchema } from '@appointly/shared';
+import { createVoiceSessionToken } from './voice/session-manager.js';
+import { globalLatencyCollector } from './voice/timing-metrics.js';
+import { initAudioCache } from './voice/audio-cache.js';
+import { setupVoiceWebSocketServer } from './voice/ws-pipeline.js';
 
 let isShuttingDown = false;
 const sseClients = new Set<http.ServerResponse>();
@@ -142,7 +146,7 @@ export function createServer() {
   const llmClient = new EvonLLMClient();
   const ttsClient = new GnaniTTSClient();
 
-  return http.createServer(async (req, res) => {
+  const server = http.createServer(async (req, res) => {
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -313,6 +317,63 @@ export function createServer() {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(globalCostMeter.getSummary()));
         return;
+      }
+
+      // 8b. Realtime Voice Session Token Generator (Rate-limited, short-lived token)
+      if (req.method === 'POST' && pathname === '/api/voice/session') {
+        let body = '';
+        req.on('data', (chunk) => (body += chunk));
+        req.on('end', () => {
+          try {
+            const parsed = body ? JSON.parse(body) : {};
+            const clientIp =
+              (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+              req.socket.remoteAddress ||
+              '127.0.0.1';
+            const tokenResult = createVoiceSessionToken(clientIp, {
+              patientPhone: parsed.patientPhone,
+              doctorId: parsed.doctorId,
+            });
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(tokenResult));
+          } catch (err: any) {
+            if (err.message && err.message.includes('TOO_MANY_REQUESTS')) {
+              res.writeHead(429, { 'Content-Type': 'application/json' });
+              res.end(
+                JSON.stringify({
+                  error: 'RATE_LIMIT_EXCEEDED',
+                  message: 'Too many requests. Please wait before creating a new session.',
+                })
+              );
+            } else {
+              res.writeHead(500, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ error: String(err) }));
+            }
+          }
+        });
+        return;
+      }
+
+      // 8c. Realtime Voice Latency Telemetry Metrics
+      if (req.method === 'GET' && pathname === '/api/voice/latency') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(globalLatencyCollector.getStats()));
+        return;
+      }
+
+      // 8d. Realtime Voice Pipeline Test Page
+      if (req.method === 'GET' && (pathname === '/voice-test' || pathname === '/voice-test.html')) {
+        const candidatePaths = [
+          path.resolve(process.cwd(), 'apps/dashboard/public/voice-test.html'),
+          path.resolve(process.cwd(), 'public/voice-test.html'),
+        ];
+        const htmlPath = candidatePaths.find((p) => fs.existsSync(p));
+        if (htmlPath) {
+          const html = fs.readFileSync(htmlPath, 'utf8');
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(html);
+          return;
+        }
       }
 
       // 9. Server-Sent Events (SSE) for live Doctor Dashboard
@@ -511,6 +572,10 @@ export function createServer() {
       res.end(JSON.stringify({ error: 'Internal server error' }));
     }
   });
+
+  setupVoiceWebSocketServer(server);
+
+  return server;
 }
 
 export async function startApp() {
@@ -525,6 +590,7 @@ export async function startApp() {
   });
 
   await db.initialize();
+  await initAudioCache();
   const doctors = await db.getDoctors();
   rootLogger.info(`Connected to database. Loaded ${doctors.length} clinic doctors.`, {
     doctorsCount: doctors.length,

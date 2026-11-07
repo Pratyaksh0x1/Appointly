@@ -9,6 +9,51 @@ Appointly is an empathetic, multilingual voice assistant designed for small clin
 
 ---
 
+## Phase 5: Realtime Voice Pipeline & Latency Optimization Highlights
+
+- **Authenticated Two-Way WebSocket Pipeline (`/ws/voice`)**:
+  - Browser streams 16kHz PCM audio chunks; server streams back sentence-chunked TTS audio frames and event messages (`session_ready`, `transcript`, `state`, `agent_text`, `filler`, `interrupt`, `latency`).
+  - Authenticated via cryptographically secure, single-use, 10-minute session tokens (`POST /api/voice/session`) with sliding-window IP rate limiting (20 req/min). Non-negotiable security: Gnani/Evon credentials are never sent to the browser.
+- **Local RMS Voice Activity Detection (VAD) & Silence Endpointing**:
+  - Frame-by-frame 16-bit PCM RMS energy evaluation with 250 ms minimum speech threshold to ignore throat clears.
+  - 700 ms silence endpointing window immediately declares end-of-speech and triggers processing without awaiting cloud provider timeouts.
+- **Pre-Generated Zero-Latency Audio Cache**:
+  - Fixed Hinglish utterances (Greetings, 700ms Fillers, Emergency 108 Escalations, Fallbacks, Farewells) are pre-synthesized at server startup.
+  - Delivers **0 ms TTS latency** and sub-50ms first-turn voice response.
+- **Sentence-Chunked Streaming TTS**:
+  - LLM and state machine outputs are split on natural punctuation boundaries (`.`, `!`, `?`, `|`, `\n`).
+  - Sentence 1 is synthesized and streamed to the client immediately while subsequent sentences are processed concurrently, dramatically cutting Time-to-First-Audio.
+- **700 ms Conversational Tool Filler Protocol**:
+  - If a database query or external tool execution exceeds 700 ms, the server dispatches a pre-cached filler audio chunk (_"Ji, main check kar rahi hoon, ek second..."_) to keep the caller engaged and mask latency.
+- **Bi-directional Barge-In (Interruption Handling)**:
+  - If the patient speaks while the agent is talking, VAD detects speech onset, the server cancels active TTS via `AbortController`, and the browser immediately purges its audio queue.
+- **Live Voice Tester & Telemetry UI**:
+  - Available at **[http://localhost:3000/voice-test.html](http://localhost:3000/voice-test.html)** with interactive mic controls, real-time waveform states, live transcripts, and turn-by-turn latency monitoring (`stt_ms`, `llm_first_token_ms`, `tts_first_audio_ms`, `total_ms`).
+- **Comprehensive Benchmark Report**:
+  - Detailed in [`docs/latency.md`](docs/latency.md) reporting P50 (85ms mock / 980ms real) and P95 (550ms mock / 1,420ms real) against the 1.5s SLA and detailing the top 3 telephony bottlenecks.
+
+---
+
+## Phase 4: Conversation Brain & Explicit State Machine Highlights
+
+- **Explicit Finite State Machine (`apps/api/src/agent/orchestrator.ts`)**:
+  - Rigid states: `GREETING_CONSENT` $\rightarrow$ `UNDERSTAND_INTENT` $\rightarrow$ `COLLECT_DETAILS` $\rightarrow$ `OFFER_SLOTS` $\rightarrow$ `CONFIRM_READBACK` $\rightarrow$ `BOOKED` \| `RESCHEDULE` \| `CANCEL` \| `ESCALATE` \| `FALLBACK`.
+  - The LLM selects natural Hinglish wording; the state machine and validated tools strictly control workflow state.
+- **Mandatory Read-Back Verification**:
+  - The agent explicitly reads back doctor name, date, start time, and visit duration queried directly from Neon PostgreSQL before finalizing any booking.
+- **Max 2 Slots Offered Guarantee**:
+  - Telephony callers suffer cognitive overload if presented with long lists. The slot generator and orchestrator strictly offer at most 2 options at a time.
+- **Doctor Dynamic Scheduling & Voice Agent Sync**:
+  - Doctors configure custom OPD consultation hours (e.g. 17:00 to 22:00 / 5 PM to 10 PM) via `PUT /api/doctors/:id/schedule`.
+  - The agent instantly absorbs new timings, rejects bookings outside doctor hours, and synchronizes connected doctor screens via SSE.
+- **Deterministic Natural Date Resolver (`date-resolver.ts`)**:
+  - Code-level resolution for Hindi/Hinglish relative date phrases (_kal_, _parson_, _aaj shaam_, _next Monday_) using `Asia/Kolkata` clinic timezone.
+- **Prompt Injection Defense & Medical Guardrails**:
+  - Unsanitized patient speech is treated as untrusted input; sanitized through strict regex guards and Zod validators.
+  - Zero medical advice: hardcoded regex intercept triggers immediate 108 emergency escalation for life-threatening symptoms (_chest pain_, _saans nahi aa rahi_, _behosh_).
+
+---
+
 ## Phase 3: Gnani Adapters, Resilience & Cost Metering Highlights
 
 - **Complete Gnani API & Evon Documentation**:
@@ -142,7 +187,7 @@ npm run typecheck
 # Code formatting and linting
 npm run lint
 
-# Run all 57 Vitest unit & concurrency tests
+# Run all 112 Vitest unit, state machine, latency & concurrency tests across 15 test suites
 npm test
 
 # Run database migration & seed on Neon
@@ -162,18 +207,23 @@ Open **[http://localhost:3000](http://localhost:3000)** in your browser to view 
 
 ## Endpoints Reference
 
-| Endpoint                | Method | Purpose                                                                                                                       |
-| :---------------------- | :----- | :---------------------------------------------------------------------------------------------------------------------------- |
-| `/healthz`              | GET    | Liveness probe (returns HTTP 200 `{ status: "ok" }`)                                                                          |
-| `/readyz`               | GET    | Readiness probe (verifies database connectivity and returns status)                                                           |
-| `/health`               | GET    | Detailed health check (database status, doctors loaded, credit budget summary)                                                |
-| `/api/doctors`          | GET    | Lists clinic doctors, specialties, fees, and consultation durations                                                           |
-| `/api/slots`            | GET    | Retrieves open slots for a doctor on a specific date (`?doctorId=dr_sharma&date=YYYY-MM-DD`)                                  |
-| `/api/appointments`     | GET    | Retrieves all confirmed appointments for the doctor dashboard                                                                 |
-| `/api/callbacks`        | GET    | Retrieves saved receptionist callback tickets                                                                                 |
-| `/api/cost`             | GET    | Live cost meter metrics against the 5,000 credit budget                                                                       |
-| `/api/chat`             | POST   | Conversational endpoint (Emergency check $\rightarrow$ Evon LLM $\rightarrow$ Tool calling $\rightarrow$ Neon DB transaction) |
-| `/api/dashboard/stream` | GET    | Server-Sent Events (SSE) stream for real-time doctor dashboard updates                                                        |
+| Endpoint                    | Method    | Purpose                                                                                                                               |
+| :-------------------------- | :-------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| `/healthz`                  | GET       | Liveness probe (returns HTTP 200 `{ status: "ok" }`)                                                                                  |
+| `/readyz`                   | GET       | Readiness probe (verifies database connectivity and returns status)                                                                   |
+| `/health`                   | GET       | Detailed health check (database status, doctors loaded, credit budget summary)                                                        |
+| `/api/doctors`              | GET       | Lists clinic doctors, specialties, fees, and consultation durations                                                                   |
+| `/api/doctors/:id/schedule` | PUT, POST | Updates doctor's OPD timing (e.g. 17:00 to 22:00) and broadcasts live SSE event to doctor dashboards                                  |
+| `/api/slots`                | GET       | Retrieves open slots for a doctor on a specific date (`?doctorId=dr_sharma&date=YYYY-MM-DD`)                                          |
+| `/api/appointments`         | GET       | Retrieves all confirmed appointments for the doctor dashboard                                                                         |
+| `/api/callbacks`            | GET       | Retrieves saved receptionist callback tickets                                                                                         |
+| `/api/cost`                 | GET       | Live cost meter metrics against the 5,000 credit budget                                                                               |
+| `/api/voice/session`        | POST      | Generates short-lived, rate-limited single-use token (`vtok_...`) for secure WebSocket authentication                                 |
+| `/api/voice/latency`        | GET       | Retrieves real-time P50 and P95 latency percentiles across STT, LLM TTFT, TTS, and total voice turns                                  |
+| `/voice-test.html`          | GET       | Live Voice Agent testing interface with microphone capture, real-time waveform states, transcript, and latency telemetry debug        |
+| `/ws/voice`                 | WebSocket | Authenticated full-duplex voice pipeline (PCM audio in $\rightarrow$ VAD $\rightarrow$ STT $\rightarrow$ Brain $\rightarrow$ TTS out) |
+| `/api/chat`                 | POST      | Conversational endpoint (Emergency check $\rightarrow$ Evon LLM $\rightarrow$ Tool calling $\rightarrow$ Neon DB transaction)         |
+| `/api/dashboard/stream`     | GET       | Server-Sent Events (SSE) stream for real-time doctor dashboard updates                                                                |
 
 ---
 
