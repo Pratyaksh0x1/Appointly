@@ -53,6 +53,15 @@ export interface CallerVerificationResult {
   errorMessage?: string;
 }
 
+export interface ClinicProfile {
+  clinicName: string;
+  clinicPhone: string;
+  clinicAddress: string;
+  openingTime: string;
+  closingTime: string;
+  onboardingCompleted: boolean;
+}
+
 export interface Doctor {
   id: string;
   name: string;

@@ -43,6 +43,18 @@ export class MockSttAdapter implements SttProvider {
     const callId = options?.callId || 'mock_stt_call';
     const estimatedDurationSec = Math.max(1, Math.round(audio.length / 32000));
 
+    // Guard against silence, empty audio buffers, or noise-spikes triggering automated loops
+    if (audio.length < 3200) {
+      return {
+        transcript: '',
+        confidence: 0,
+        language: options?.languageCode || 'hi-IN',
+        durationSeconds: 0,
+        isFinal: true,
+        rawResponse: { mock: true, empty: true },
+      };
+    }
+
     // Pre-flight check & audit record (0 credits in mock mode)
     globalCostMeter.checkCanSpend(callId, 0);
     globalCostMeter.recordSpend(callId, 'PRISMA_STT', estimatedDurationSec, true);

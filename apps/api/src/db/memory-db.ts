@@ -13,6 +13,7 @@ import {
   BookingResult,
   DoctorCallSummary,
   ReminderRecord,
+  ClinicProfile,
 } from '../types/index.js';
 import { maskPhone } from '../logger/logger.js';
 
@@ -83,6 +84,14 @@ export class MemoryDatabaseClient implements IDatabaseClient {
   private outboxEvents: any[] = [];
   private callSummaries: DoctorCallSummary[] = [];
   private reminders: ReminderRecord[] = [];
+  private clinicProfile = {
+    clinicName: 'Arogya Care Clinic',
+    clinicPhone: '+91 98765 43210',
+    clinicAddress: '42, Green Glen Layout, Bellandur, Bengaluru',
+    openingTime: '09:00',
+    closingTime: '22:00',
+    onboardingCompleted: false,
+  };
 
   // Simple async lock to emulate atomic DB transaction
   private transactionMutex: Promise<void> = Promise.resolve();
@@ -111,6 +120,48 @@ export class MemoryDatabaseClient implements IDatabaseClient {
 
   public async getDoctorById(id: string): Promise<Doctor | null> {
     return this.doctors.get(id) || null;
+  }
+
+  public async getClinicProfile(): Promise<ClinicProfile> {
+    return { ...this.clinicProfile };
+  }
+
+  public async updateClinicProfile(profile: Partial<ClinicProfile>): Promise<ClinicProfile> {
+    this.clinicProfile = {
+      ...this.clinicProfile,
+      ...profile,
+      onboardingCompleted: true,
+    };
+    return { ...this.clinicProfile };
+  }
+
+  public async setDoctors(newDoctors: Doctor[]): Promise<Doctor[]> {
+    this.doctors.clear();
+    for (const doc of newDoctors) {
+      const workingHoursStart = doc.workingHoursStart || '09:00';
+      const workingHoursEnd = doc.workingHoursEnd || '17:00';
+      const durationMinutes = doc.durationMinutes || 30;
+
+      // Ensure slots are computed
+      if (!doc.availableSlots || doc.availableSlots.length === 0) {
+        const [sh, sm] = workingHoursStart.split(':').map((v) => parseInt(v, 10));
+        const [eh, em] = workingHoursEnd.split(':').map((v) => parseInt(v, 10));
+        const startMin = sh * 60 + sm;
+        const endMin = eh * 60 + em;
+
+        const slots: string[] = [];
+        for (let cur = startMin; cur + durationMinutes <= endMin; cur += durationMinutes) {
+          const h = Math.floor(cur / 60)
+            .toString()
+            .padStart(2, '0');
+          const m = (cur % 60).toString().padStart(2, '0');
+          slots.push(`${h}:${m}`);
+        }
+        doc.availableSlots = slots;
+      }
+      this.doctors.set(doc.id, doc);
+    }
+    return Array.from(this.doctors.values());
   }
 
   public async updateDoctorSchedule(

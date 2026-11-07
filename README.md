@@ -334,6 +334,10 @@ See [`docs/demo-script.md`](docs/demo-script.md) for a step-by-step hackathon de
 | `/metrics`                         | GET       | Prometheus exposition metrics (v0.0.4) for calls, latencies, bookings, and SLOs                                                       |
 | `/api/metrics`                     | GET       | Real-time JSON telemetry stream for dashboard charts and percentiles                                                                  |
 | `/api/alerts`                      | GET       | Real-time AlertEngine monitor for error rate and latency breaches                                                                     |
+| `/api/config/auth`                 | GET       | Public auth configuration exposing Google OAuth Client ID                                                                              |
+| `/api/clinic/profile`              | GET       | Retrieves clinic information, operating hours, and active doctor roster                                                               |
+| `/api/clinic/onboarding`           | POST      | One-time setup wizard saving clinic hours, doctor count, consultation timings, slot durations, and fees                               |
+| `/api/clinic/settings`             | PUT       | Customizes clinic profile and doctor schedule anytime from doctor settings                                                            |
 | `/api/auth/google`                 | POST      | Doctor login via Google Identity Services token                                                                                       |
 | `/api/auth/dev-login`              | POST      | One-click doctor demo login for offline testing and hackathon judging                                                                 |
 | `/api/doctors`                     | GET       | Lists clinic doctors, specialties, fees, and consultation durations                                                                   |

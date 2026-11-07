@@ -40,6 +40,7 @@ import {
 import { globalMetrics } from './observability/metrics.js';
 import { globalAlertEngine } from './observability/alerts.js';
 import { AppointlyEvents } from './observability/events.js';
+import { Doctor } from './types/index.js';
 
 let isShuttingDown = false;
 const sseClients = new Set<http.ServerResponse>();
@@ -316,6 +317,98 @@ export function createServer() {
         const doctors = await db.getDoctors();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(doctors));
+        return;
+      }
+
+      // 4-CONFIG. Public Auth Configuration (exposes Google Client ID safely)
+      if (req.method === 'GET' && pathname === '/api/config/auth') {
+        const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            googleClientId,
+            hasGoogleAuth: Boolean(googleClientId && googleClientId.length > 5),
+          })
+        );
+        return;
+      }
+
+      // 4-CLINIC. Clinic Profile & Onboarding Settings
+      if (req.method === 'GET' && pathname === '/api/clinic/profile') {
+        const profile = db.getClinicProfile ? await db.getClinicProfile() : {};
+        const doctors = await db.getDoctors();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ profile, doctors }));
+        return;
+      }
+
+      if (
+        (req.method === 'POST' || req.method === 'PUT') &&
+        (pathname === '/api/clinic/onboarding' || pathname === '/api/clinic/settings')
+      ) {
+        const bodyRes = await readAndSanitizeJsonBody(req, res);
+        if (!bodyRes.success) return;
+        try {
+          const { clinicName, clinicPhone, clinicAddress, openingTime, closingTime, doctors } =
+            bodyRes.data || {};
+
+          let updatedProfile = {};
+          if (db.updateClinicProfile) {
+            updatedProfile = await db.updateClinicProfile({
+              clinicName: clinicName || 'Arogya Care Clinic',
+              clinicPhone: clinicPhone || '+91 98765 43210',
+              clinicAddress: clinicAddress || '42, Green Glen Layout, Bellandur, Bengaluru',
+              openingTime: openingTime || '09:00',
+              closingTime: closingTime || '22:00',
+              onboardingCompleted: true,
+            });
+          }
+
+          let updatedDoctors: Doctor[] = [];
+          if (Array.isArray(doctors) && doctors.length > 0 && db.setDoctors) {
+            const formattedDoctors: Doctor[] = doctors.map((d: any, idx: number) => ({
+              id: d.id || `dr_${(d.name || `doctor_${idx + 1}`).toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+              name: d.name || `Dr. Doctor ${idx + 1}`,
+              specialty: d.specialty || 'General Medicine',
+              workingHoursStart: d.workingHoursStart || '09:00',
+              workingHoursEnd: d.workingHoursEnd || '18:00',
+              durationMinutes: Number(d.durationMinutes) || 30,
+              fee: Number(d.fee) || 500,
+              activeDays: Array.isArray(d.activeDays) && d.activeDays.length > 0
+                ? d.activeDays
+                : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+              availableSlots: d.availableSlots || [],
+            }));
+            updatedDoctors = await db.setDoctors(formattedDoctors);
+          } else {
+            updatedDoctors = await db.getDoctors();
+          }
+
+          await emitOutboxEvent('clinic_updated', {
+            profile: updatedProfile,
+            doctorsCount: updatedDoctors.length,
+            timestamp: new Date().toISOString(),
+          });
+
+          rootLogger.info('[Clinic] Clinic profile & onboarding schedule updated successfully', {
+            clinicName,
+            doctorsCount: updatedDoctors.length,
+          });
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              success: true,
+              message: 'Clinic profile & doctor schedule saved successfully',
+              profile: updatedProfile,
+              doctors: updatedDoctors,
+            })
+          );
+        } catch (err: any) {
+          rootLogger.error('[Clinic] Failed to update clinic settings:', err);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'CLINIC_UPDATE_FAILED', message: String(err) }));
+        }
         return;
       }
 

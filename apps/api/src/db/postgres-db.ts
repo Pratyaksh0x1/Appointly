@@ -13,6 +13,7 @@ import {
   BookingResult,
   DoctorCallSummary,
   ReminderRecord,
+  ClinicProfile,
 } from '../types/index.js';
 import { maskPhone, rootLogger } from '../logger/logger.js';
 import { kolkataToUtc, addMinutes } from '../utils/timezone.js';
@@ -21,6 +22,14 @@ import path from 'path';
 
 export class PostgresDatabaseClient implements IDatabaseClient {
   private pool: pg.Pool;
+  private clinicProfile: ClinicProfile = {
+    clinicName: 'Arogya Care Clinic',
+    clinicPhone: '+91 98765 43210',
+    clinicAddress: '42, Green Glen Layout, Bellandur, Bengaluru',
+    openingTime: '09:00',
+    closingTime: '22:00',
+    onboardingCompleted: false,
+  };
 
   constructor(connectionString: string) {
     const isSsl = connectionString.includes('sslmode=') || connectionString.includes('neon.tech');
@@ -84,6 +93,72 @@ export class PostgresDatabaseClient implements IDatabaseClient {
     const res = await this.pool.query('SELECT * FROM doctors WHERE id = $1', [id]);
     if (res.rows.length === 0) return null;
     return this.mapDoctorRow(res.rows[0]);
+  }
+
+  public async getClinicProfile(): Promise<ClinicProfile> {
+    return { ...this.clinicProfile };
+  }
+
+  public async updateClinicProfile(profile: Partial<ClinicProfile>): Promise<ClinicProfile> {
+    this.clinicProfile = {
+      ...this.clinicProfile,
+      ...profile,
+      onboardingCompleted: true,
+    };
+    return { ...this.clinicProfile };
+  }
+
+  public async setDoctors(newDoctors: Doctor[]): Promise<Doctor[]> {
+    for (const doc of newDoctors) {
+      const workingHoursStart = doc.workingHoursStart || '09:00';
+      const workingHoursEnd = doc.workingHoursEnd || '17:00';
+      const durationMinutes = doc.durationMinutes || 30;
+
+      const [sh, sm] = workingHoursStart.split(':').map((v) => parseInt(v, 10));
+      const [eh, em] = workingHoursEnd.split(':').map((v) => parseInt(v, 10));
+      const startMin = sh * 60 + sm;
+      const endMin = eh * 60 + em;
+
+      const slots: string[] = [];
+      for (let cur = startMin; cur + durationMinutes <= endMin; cur += durationMinutes) {
+        const h = Math.floor(cur / 60)
+          .toString()
+          .padStart(2, '0');
+        const m = (cur % 60).toString().padStart(2, '0');
+        slots.push(`${h}:${m}`);
+      }
+      doc.availableSlots = slots;
+
+      await this.pool
+        .query(
+          `INSERT INTO doctors (id, name, specialty, fee, duration_minutes, active_days, working_hours_start, working_hours_end, available_slots)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           ON CONFLICT (id) DO UPDATE SET
+             name = EXCLUDED.name,
+             specialty = EXCLUDED.specialty,
+             fee = EXCLUDED.fee,
+             duration_minutes = EXCLUDED.duration_minutes,
+             active_days = EXCLUDED.active_days,
+             working_hours_start = EXCLUDED.working_hours_start,
+             working_hours_end = EXCLUDED.working_hours_end,
+             available_slots = EXCLUDED.available_slots`,
+          [
+            doc.id,
+            doc.name,
+            doc.specialty,
+            doc.fee || 500,
+            durationMinutes,
+            doc.activeDays || ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+            workingHoursStart,
+            workingHoursEnd,
+            slots,
+          ]
+        )
+        .catch((err) => {
+          rootLogger.warn(`Could not sync doctor ${doc.id} to postgres table:`, err);
+        });
+    }
+    return this.getDoctors();
   }
 
   public async updateDoctorSchedule(

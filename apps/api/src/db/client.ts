@@ -11,6 +11,7 @@ import {
   BookingResult,
   DoctorCallSummary,
   ReminderRecord,
+  ClinicProfile,
 } from '../types/index.js';
 
 export interface IDatabaseClient {
@@ -19,6 +20,9 @@ export interface IDatabaseClient {
 
   getDoctors(): Promise<Doctor[]>;
   getDoctorById(id: string): Promise<Doctor | null>;
+  setDoctors?(doctors: Doctor[]): Promise<Doctor[]>;
+  getClinicProfile?(): Promise<ClinicProfile>;
+  updateClinicProfile?(profile: Partial<ClinicProfile>): Promise<ClinicProfile>;
   updateDoctorSchedule(
     doctorId: string,
     schedule: {

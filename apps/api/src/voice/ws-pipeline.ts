@@ -36,7 +36,8 @@ const IDLE_TIMEOUT_MS = 45 * 1000; // 45 seconds idle timeout
 const FILLER_THRESHOLD_MS = 700; // Trigger filler phrase if tool call > 700ms
 
 export interface ClientControlMessage {
-  type: 'start_session' | 'speech_end' | 'interrupt' | 'ping';
+  type: 'start_session' | 'speech_end' | 'interrupt' | 'ping' | 'user_text' | 'manual_speech';
+  text?: string;
   patientPhone?: string;
   doctorId?: string;
 }
@@ -163,6 +164,15 @@ export class RealtimeVoiceSession {
   public async handleControlMessage(msg: ClientControlMessage): Promise<void> {
     if (msg.type === 'interrupt') {
       this.handleBargeIn();
+    } else if (msg.type === 'user_text' || msg.type === 'manual_speech') {
+      const userText = (msg.text || '').trim();
+      if (userText.length > 0 && !this.isProcessingTurn) {
+        rootLogger.info(`[VoiceSession] Received manual user text turn: "${userText}"`, {
+          callId: this.callId,
+          userText,
+        });
+        await this.processCallerTurn(Buffer.alloc(0), userText);
+      }
     } else if (msg.type === 'speech_end') {
       if (this.accumulatedAudioChunks.length > 0 && !this.isProcessingTurn) {
         const fullAudio = Buffer.concat(this.accumulatedAudioChunks);
