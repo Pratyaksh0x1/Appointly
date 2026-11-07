@@ -27,6 +27,9 @@ import { rootLogger, maskPhone } from '../logger/logger.js';
 import { globalCostMeter } from '../cost/cost-meter.js';
 import { getDatabaseClient } from '../db/index.js';
 import { broadcastDashboardEvent } from '../index.js';
+import { globalMetrics } from '../observability/metrics.js';
+import { globalAlertEngine } from '../observability/alerts.js';
+import { AppointlyEvents } from '../observability/events.js';
 
 const MAX_CALL_DURATION_MS = 5 * 60 * 1000; // 5 minutes max call limit
 const IDLE_TIMEOUT_MS = 45 * 1000; // 45 seconds idle timeout
@@ -69,7 +72,11 @@ export class RealtimeVoiceSession {
    * Initializes session: sends ready event and pre-cached greeting audio.
    */
   public async initialize(): Promise<void> {
-    rootLogger.info(`[VoiceSession] Starting realtime session ${this.callId}`);
+    globalMetrics.startCall();
+    rootLogger.info(`[VoiceSession] Starting realtime session ${this.callId}`, {
+      event: AppointlyEvents.CALL_STARTED,
+      callId: this.callId,
+    });
 
     // Send session_ready event
     this.sendEvent({
@@ -310,6 +317,14 @@ export class RealtimeVoiceSession {
       // 5. LATENCY TELEMETRY & DEBUG METRICS
       // ==========================================
       const metrics = this.metricsTracker.finalizeMetrics();
+      globalMetrics.recordTurnLatency({
+        stt_ms: metrics.stt_ms,
+        llm_first_token_ms: metrics.llm_first_token_ms,
+        tts_first_audio_ms: metrics.tts_first_audio_ms,
+        turn_total_ms: metrics.total_ms,
+      });
+      globalAlertEngine.evaluateSystemHealth();
+
       this.sendEvent({
         type: 'latency',
         metrics,
@@ -323,6 +338,8 @@ export class RealtimeVoiceSession {
         setTimeout(() => this.teardown('CALL_COMPLETED_SUCCESS'), 3000);
       }
     } catch (err: any) {
+      globalMetrics.recordFailure('VOICE_TURN_ERROR');
+      globalAlertEngine.evaluateSystemHealth();
       rootLogger.error(`[VoiceSession] Turn error in ${this.callId}:`, err);
 
       // Phase 8: Graceful Degradation Protocol
@@ -433,9 +450,21 @@ export class RealtimeVoiceSession {
       rootLogger.warn('[VoiceSession] Error in handleCallDropped on teardown', { err });
     });
 
+    let callStatus: 'completed' | 'dropped' | 'emergency' | 'error' = 'completed';
+    if (reason.includes('ERROR') || reason.includes('DEGRADATION')) {
+      callStatus = 'error';
+    } else if (reason.includes('DROPPED') || reason.includes('IDLE')) {
+      callStatus = 'dropped';
+    } else if (this.conversationSession.state === 'ESCALATE') {
+      callStatus = 'emergency';
+    }
+    globalMetrics.endCall(callStatus);
+
     rootLogger.info(`[VoiceSession] Session closed: ${this.callId} (${reason})`, {
+      event: AppointlyEvents.CALL_ENDED,
       callId: this.callId,
       turnsCompleted: this.turnIndex,
+      status: callStatus,
       reason,
     });
 

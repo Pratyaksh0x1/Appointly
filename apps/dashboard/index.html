@@ -995,6 +995,9 @@
                 >0</span
               >
             </button>
+            <button class="tab-btn" id="tabBtnObservability" onclick="switchTab('observability')">
+              📊 Observability &amp; SLO
+            </button>
           </div>
 
           <!-- TAB 1: Rich Appointment Cards View -->
@@ -1092,6 +1095,381 @@
               <div class="appointments-list" id="callSummariesContainer">
                 <div style="text-align: center; color: var(--text-muted); padding: 40px 0">
                   Loading call summaries...
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 5: Observability, Metrics & SLO View -->
+          <div id="tabContentObservability" style="display: none">
+            <div class="panel">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <span>📊</span> Production Observability, SLOs &amp; Telemetry
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center">
+                  <a
+                    href="/metrics"
+                    target="_blank"
+                    class="chip"
+                    style="text-decoration: none; color: var(--primary); font-weight: 700"
+                  >
+                    ⚡ Prometheus (/metrics) &rarr;
+                  </a>
+                  <button class="chip" onclick="fetchMetricsAndAlerts()">🔄 Refresh</button>
+                </div>
+              </div>
+
+              <!-- Active Alerts Banner if Any -->
+              <div id="observabilityAlertsContainer" style="margin-bottom: 16px"></div>
+
+              <!-- SLO Cards Row -->
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+                  gap: 16px;
+                  margin-bottom: 20px;
+                "
+              >
+                <div
+                  style="
+                    background: #f8fafc;
+                    border: 1px solid var(--border);
+                    border-radius: 10px;
+                    padding: 16px;
+                  "
+                >
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: center;
+                      margin-bottom: 8px;
+                    "
+                  >
+                    <div
+                      style="
+                        font-size: 0.8rem;
+                        font-weight: 700;
+                        color: var(--text-muted);
+                        text-transform: uppercase;
+                      "
+                    >
+                      Availability SLO
+                    </div>
+                    <span
+                      id="sloAvailBadge"
+                      class="tab-badge"
+                      style="background: #dcfce7; color: #166534"
+                      >MET</span
+                    >
+                  </div>
+                  <div
+                    style="font-size: 1.8rem; font-weight: 800; color: var(--text-main)"
+                    id="sloAvailActual"
+                  >
+                    99.9%
+                  </div>
+                  <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px">
+                    Target: 99.9% Availability (Voice &amp; API)
+                  </div>
+                </div>
+
+                <div
+                  style="
+                    background: #f8fafc;
+                    border: 1px solid var(--border);
+                    border-radius: 10px;
+                    padding: 16px;
+                  "
+                >
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: center;
+                      margin-bottom: 8px;
+                    "
+                  >
+                    <div
+                      style="
+                        font-size: 0.8rem;
+                        font-weight: 700;
+                        color: var(--text-muted);
+                        text-transform: uppercase;
+                      "
+                    >
+                      P95 Turn Latency SLO
+                    </div>
+                    <span
+                      id="sloLatencyBadge"
+                      class="tab-badge"
+                      style="background: #dcfce7; color: #166534"
+                      >MET</span
+                    >
+                  </div>
+                  <div style="font-size: 1.8rem; font-weight: 800; color: var(--text-main)">
+                    <span id="sloLatencyActual">340</span> ms
+                  </div>
+                  <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px">
+                    Target: P95 &lt; 2,000 ms (Speech-to-first-audio)
+                  </div>
+                </div>
+
+                <div
+                  style="
+                    background: #f8fafc;
+                    border: 1px solid var(--border);
+                    border-radius: 10px;
+                    padding: 16px;
+                  "
+                >
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      align-items: center;
+                      margin-bottom: 8px;
+                    "
+                  >
+                    <div
+                      style="
+                        font-size: 0.8rem;
+                        font-weight: 700;
+                        color: var(--text-muted);
+                        text-transform: uppercase;
+                      "
+                    >
+                      Avg Credits / Call
+                    </div>
+                    <span class="tab-badge" style="background: #e0f2fe; color: #0369a1"
+                      >METERED</span
+                    >
+                  </div>
+                  <div style="font-size: 1.8rem; font-weight: 800; color: var(--text-main)">
+                    <span id="metricAvgCredits">0.00</span>
+                  </div>
+                  <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px">
+                    Rate: ~₹0.05 per Gnani AI credit burned
+                  </div>
+                </div>
+              </div>
+
+              <!-- Free-Tier Architecture Note -->
+              <div
+                style="
+                  background: #eff6ff;
+                  border-left: 4px solid #3b82f6;
+                  padding: 12px 16px;
+                  border-radius: 6px;
+                  font-size: 0.8rem;
+                  color: #1e40af;
+                  margin-bottom: 20px;
+                "
+              >
+                <strong>Note on Free-Tier Limits:</strong> Neon Serverless compute suspends after 5
+                min idle, inducing a ~500ms–1.5s cold-start on the first turn. Pre-cached
+                greeting/apology audio buffers in memory completely hide this latency from the
+                caller.
+              </div>
+
+              <!-- Call & Conversion Breakdown -->
+              <div
+                style="
+                  display: grid;
+                  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+                  gap: 16px;
+                  margin-bottom: 20px;
+                "
+              >
+                <div
+                  style="
+                    background: #ffffff;
+                    border: 1px solid var(--border);
+                    border-radius: 8px;
+                    padding: 14px;
+                  "
+                >
+                  <h4 style="font-size: 0.85rem; margin-bottom: 10px; color: var(--text-main)">
+                    📞 Telephony Call Breakdown
+                  </h4>
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      padding: 6px 0;
+                      border-bottom: 1px dashed var(--border);
+                      font-size: 0.8rem;
+                    "
+                  >
+                    <span>Total Calls Handled:</span> <strong id="metricCallsTotal">0</strong>
+                  </div>
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      padding: 6px 0;
+                      border-bottom: 1px dashed var(--border);
+                      font-size: 0.8rem;
+                    "
+                  >
+                    <span>Completed Successfully:</span>
+                    <strong style="color: var(--accent)" id="metricCallsCompleted">0</strong>
+                  </div>
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      padding: 6px 0;
+                      border-bottom: 1px dashed var(--border);
+                      font-size: 0.8rem;
+                    "
+                  >
+                    <span>Emergency Escalations:</span>
+                    <strong style="color: var(--danger)" id="metricCallsEmergency">0</strong>
+                  </div>
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      padding: 6px 0;
+                      font-size: 0.8rem;
+                    "
+                  >
+                    <span>Dropped / Errored:</span>
+                    <strong style="color: var(--warning)" id="metricCallsDropped">0</strong>
+                  </div>
+                </div>
+
+                <div
+                  style="
+                    background: #ffffff;
+                    border: 1px solid var(--border);
+                    border-radius: 8px;
+                    padding: 14px;
+                  "
+                >
+                  <h4 style="font-size: 0.85rem; margin-bottom: 10px; color: var(--text-main)">
+                    🏥 Booking Funnel &amp; Conversion
+                  </h4>
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      padding: 6px 0;
+                      border-bottom: 1px dashed var(--border);
+                      font-size: 0.8rem;
+                    "
+                  >
+                    <span>Bookings Succeeded:</span>
+                    <strong style="color: var(--accent)" id="metricBookingsSucceeded">0</strong>
+                  </div>
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      padding: 6px 0;
+                      border-bottom: 1px dashed var(--border);
+                      font-size: 0.8rem;
+                    "
+                  >
+                    <span>Bookings Failed (Full):</span>
+                    <strong id="metricBookingsFailed">0</strong>
+                  </div>
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      padding: 6px 0;
+                      border-bottom: 1px dashed var(--border);
+                      font-size: 0.8rem;
+                    "
+                  >
+                    <span>Rescheduled &amp; Cancelled:</span>
+                    <strong
+                      ><span id="metricReschedules">0</span> /
+                      <span id="metricCancels">0</span></strong
+                    >
+                  </div>
+                  <div
+                    style="
+                      display: flex;
+                      justify-content: space-between;
+                      padding: 6px 0;
+                      font-size: 0.8rem;
+                    "
+                  >
+                    <span>Booking Conversion Rate:</span>
+                    <strong style="color: var(--primary)" id="metricConversionRate">0%</strong>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Stage Latency Percentiles Table -->
+              <div style="margin-top: 10px">
+                <h4 style="font-size: 0.85rem; margin-bottom: 10px; color: var(--text-main)">
+                  ⏱️ Per-Stage Latency Percentiles (Milliseconds)
+                </h4>
+                <div style="overflow-x: auto">
+                  <table
+                    style="
+                      width: 100%;
+                      border-collapse: collapse;
+                      font-size: 0.8rem;
+                      text-align: left;
+                    "
+                  >
+                    <thead>
+                      <tr style="background: #f1f5f9; border-bottom: 2px solid var(--border)">
+                        <th style="padding: 8px 12px">Stage</th>
+                        <th style="padding: 8px 12px">Min</th>
+                        <th style="padding: 8px 12px">P50 (Median)</th>
+                        <th style="padding: 8px 12px">P90</th>
+                        <th style="padding: 8px 12px">P95</th>
+                        <th style="padding: 8px 12px">Max</th>
+                        <th style="padding: 8px 12px">Avg</th>
+                      </tr>
+                    </thead>
+                    <tbody id="latencyTableBody">
+                      <tr style="border-bottom: 1px solid var(--border)">
+                        <td style="padding: 8px 12px; font-weight: 700">Full Turn (Total)</td>
+                        <td id="latTurnMin">-</td>
+                        <td id="latTurnP50">-</td>
+                        <td id="latTurnP90">-</td>
+                        <td id="latTurnP95" style="font-weight: 700; color: var(--primary)">-</td>
+                        <td id="latTurnMax">-</td>
+                        <td id="latTurnAvg">-</td>
+                      </tr>
+                      <tr style="border-bottom: 1px solid var(--border)">
+                        <td style="padding: 8px 12px">Prisma STT</td>
+                        <td id="latSttMin">-</td>
+                        <td id="latSttP50">-</td>
+                        <td id="latSttP90">-</td>
+                        <td id="latSttP95">-</td>
+                        <td id="latSttMax">-</td>
+                        <td id="latSttAvg">-</td>
+                      </tr>
+                      <tr style="border-bottom: 1px solid var(--border)">
+                        <td style="padding: 8px 12px">Evon LLM First Token</td>
+                        <td id="latLlmMin">-</td>
+                        <td id="latLlmP50">-</td>
+                        <td id="latLlmP90">-</td>
+                        <td id="latLlmP95">-</td>
+                        <td id="latLlmMax">-</td>
+                        <td id="latLlmAvg">-</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 12px">Timbre TTS First Audio</td>
+                        <td id="latTtsMin">-</td>
+                        <td id="latTtsP50">-</td>
+                        <td id="latTtsP90">-</td>
+                        <td id="latTtsP95">-</td>
+                        <td id="latTtsMax">-</td>
+                        <td id="latTtsAvg">-</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -1737,7 +2115,7 @@
       // Tab Switching
       function switchTab(tabId) {
         activeTab = tabId;
-        ['Cards', 'DayView', 'Callbacks', 'Summaries'].forEach((t) => {
+        ['Cards', 'DayView', 'Callbacks', 'Summaries', 'Observability'].forEach((t) => {
           const btn = document.getElementById(`tabBtn${t}`);
           const content = document.getElementById(`tabContent${t}`);
           if (btn && content) {
@@ -1755,6 +2133,117 @@
           renderDayViewTimeline();
         } else if (tabId === 'summaries') {
           renderCallSummaries();
+        } else if (tabId === 'observability') {
+          fetchMetricsAndAlerts();
+        }
+      }
+
+      async function fetchMetricsAndAlerts() {
+        try {
+          const [metricsRes, alertsRes] = await Promise.all([
+            fetch('/api/metrics'),
+            fetch('/api/alerts'),
+          ]);
+
+          if (metricsRes.ok) {
+            const data = await metricsRes.json();
+            // SLO
+            const availActual = data.slo.availability_actual_percent;
+            const availStatus = data.slo.availability_status;
+            const elAvailActual = document.getElementById('sloAvailActual');
+            const elAvailBadge = document.getElementById('sloAvailBadge');
+            if (elAvailActual) elAvailActual.textContent = `${availActual}%`;
+            if (elAvailBadge) {
+              elAvailBadge.textContent = availStatus;
+              elAvailBadge.style.background = availStatus === 'MET' ? '#dcfce7' : '#fee2e2';
+              elAvailBadge.style.color = availStatus === 'MET' ? '#166534' : '#991b1b';
+            }
+
+            const p95Latency = data.slo.p95_turn_latency_ms;
+            const latencyStatus = data.slo.latency_slo_status;
+            const elLatencyActual = document.getElementById('sloLatencyActual');
+            const elLatencyBadge = document.getElementById('sloLatencyBadge');
+            if (elLatencyActual) elLatencyActual.textContent = p95Latency;
+            if (elLatencyBadge) {
+              elLatencyBadge.textContent = latencyStatus;
+              elLatencyBadge.style.background = latencyStatus === 'MET' ? '#dcfce7' : '#fee2e2';
+              elLatencyBadge.style.color = latencyStatus === 'MET' ? '#166534' : '#991b1b';
+            }
+
+            const elCredits = document.getElementById('metricAvgCredits');
+            if (elCredits) elCredits.textContent = data.credits.avg_credits_per_call.toFixed(2);
+
+            // Calls breakdown
+            const elCallsTotal = document.getElementById('metricCallsTotal');
+            const elCallsCompleted = document.getElementById('metricCallsCompleted');
+            const elCallsEmergency = document.getElementById('metricCallsEmergency');
+            const elCallsDropped = document.getElementById('metricCallsDropped');
+            if (elCallsTotal) elCallsTotal.textContent = data.calls.total;
+            if (elCallsCompleted) elCallsCompleted.textContent = data.calls.completed;
+            if (elCallsEmergency) elCallsEmergency.textContent = data.calls.emergency;
+            if (elCallsDropped) elCallsDropped.textContent = data.calls.dropped + data.calls.error;
+
+            // Funnel
+            const elBookingsSucceeded = document.getElementById('metricBookingsSucceeded');
+            const elBookingsFailed = document.getElementById('metricBookingsFailed');
+            const elReschedules = document.getElementById('metricReschedules');
+            const elCancels = document.getElementById('metricCancels');
+            const elConversion = document.getElementById('metricConversionRate');
+            if (elBookingsSucceeded) elBookingsSucceeded.textContent = data.bookings.succeeded;
+            if (elBookingsFailed) elBookingsFailed.textContent = data.bookings.failed;
+            if (elReschedules) elReschedules.textContent = data.reschedules.succeeded;
+            if (elCancels) elCancels.textContent = data.cancellations.succeeded;
+            if (elConversion)
+              elConversion.textContent = `${data.bookings.conversion_rate_percent}%`;
+
+            // Stage Latencies Table
+            const l = data.latencies;
+            const populateRow = (prefix, stats) => {
+              const elMin = document.getElementById(`${prefix}Min`);
+              const elP50 = document.getElementById(`${prefix}P50`);
+              const elP90 = document.getElementById(`${prefix}P90`);
+              const elP95 = document.getElementById(`${prefix}P95`);
+              const elMax = document.getElementById(`${prefix}Max`);
+              const elAvg = document.getElementById(`${prefix}Avg`);
+              if (elMin) elMin.textContent = stats.count > 0 ? stats.min : '-';
+              if (elP50) elP50.textContent = stats.count > 0 ? stats.p50 : '-';
+              if (elP90) elP90.textContent = stats.count > 0 ? stats.p90 : '-';
+              if (elP95) elP95.textContent = stats.count > 0 ? stats.p95 : '-';
+              if (elMax) elMax.textContent = stats.count > 0 ? stats.max : '-';
+              if (elAvg) elAvg.textContent = stats.count > 0 ? stats.avg : '-';
+            };
+            populateRow('latTurn', l.turn_total);
+            populateRow('latStt', l.stt);
+            populateRow('latLlm', l.llm_first_token);
+            populateRow('latTts', l.tts_first_audio);
+          }
+
+          if (alertsRes.ok) {
+            const alertsData = await alertsRes.json();
+            const container = document.getElementById('observabilityAlertsContainer');
+            if (container) {
+              if (alertsData.activeAlerts && alertsData.activeAlerts.length > 0) {
+                container.innerHTML = alertsData.activeAlerts
+                  .map(
+                    (a) => `
+                  <div style="background: #fef2f2; border-left: 4px solid var(--danger); border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; font-size: 0.82rem; color: #991b1b;">
+                    <strong>🚨 [${a.severity}] ${a.name}:</strong> ${a.message}
+                    <div style="font-size: 0.72rem; color: #b91c1c; margin-top: 3px;">Triggered at: ${new Date(a.triggeredAt).toLocaleTimeString('en-IN')} | Current Value: ${a.metricValue} (Threshold: ${a.thresholdValue})</div>
+                  </div>
+                `
+                  )
+                  .join('');
+              } else {
+                container.innerHTML = `
+                  <div style="background: #f0fdf4; border-left: 4px solid var(--accent); border-radius: 6px; padding: 10px 14px; font-size: 0.82rem; color: #166534;">
+                    <strong>✅ All Systems Nominal:</strong> Zero active alerts. System operating within 99.9% availability and &lt; 2,000ms latency boundaries.
+                  </div>
+                `;
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Error fetching metrics/alerts:', e);
         }
       }
 

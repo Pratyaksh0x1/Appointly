@@ -11,6 +11,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { getBookingCoreService } from '../services/booking-service.js';
 import { getDatabaseClient } from '../db/index.js';
+import { getEnv } from '../config/env.js';
 import { kolkataToUtc, formatKolkata } from '../utils/timezone.js';
 import { maskPhone, rootLogger } from '../logger/logger.js';
 import { ToolDefinition } from '../services/evon-llm-client.js';
@@ -239,8 +240,9 @@ export async function executeAgentTool(
   context: ToolExecutionContext
 ): Promise<ToolExecutionResponse> {
   const { callId } = context;
-  const bookingService = getBookingCoreService();
+  const env = getEnv();
   const db = getDatabaseClient();
+  const bookingService = env.USE_IN_MEMORY_DB ? null : getBookingCoreService();
 
   rootLogger.info(`[AgentTool] Executing tool: ${toolName}`, {
     callId,
@@ -258,7 +260,32 @@ export async function executeAgentTool(
           };
         }
         const { doctorId, date, appointmentTypeId } = parseRes.data;
-        const slotsResult = await bookingService.checkSlots(doctorId, date, appointmentTypeId);
+
+        if (env.USE_IN_MEMORY_DB) {
+          const doctor = await db.getDoctorById(doctorId);
+          if (!doctor) {
+            return {
+              success: false,
+              error: `DOCTOR_NOT_FOUND: Doctor with ID ${doctorId} not found.`,
+            };
+          }
+          const availableSlots = await db.getAvailableSlots(doctorId, date);
+          return {
+            success: true,
+            data: {
+              doctorId: doctor.id,
+              doctorName: doctor.name,
+              specialty: doctor.specialty,
+              date,
+              workingHours: `${doctor.workingHoursStart} - ${doctor.workingHoursEnd}`,
+              availableSlots,
+              totalAvailable: availableSlots.length,
+              durationMinutes: doctor.durationMinutes || 30,
+            },
+          };
+        }
+
+        const slotsResult = await bookingService!.checkSlots(doctorId, date, appointmentTypeId);
 
         return {
           success: true,
@@ -284,9 +311,32 @@ export async function executeAgentTool(
           };
         }
         const { doctorId, date, startTime, patientPhone } = parseRes.data;
+
+        if (env.USE_IN_MEMORY_DB) {
+          const available = await db.getAvailableSlots(doctorId, date);
+          if (!available.includes(startTime)) {
+            return {
+              success: false,
+              error: 'SLOT_NOT_AVAILABLE',
+              userMessage: 'Yeh slot hold nahi ho paya. Kripya doosra samay chunein.',
+            };
+          }
+          const holdToken = `hold_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+          return {
+            success: true,
+            data: {
+              holdId: holdToken,
+              holdToken,
+              doctorId,
+              slotStart: startTime,
+              expiresAt: '2 minutes',
+            },
+          };
+        }
+
         const slotStartUtc = kolkataToUtc(date, startTime);
 
-        const holdRes = await bookingService.holdSlot({
+        const holdRes = await bookingService!.holdSlot({
           doctorId,
           date,
           startTime,
@@ -323,7 +373,16 @@ export async function executeAgentTool(
           };
         }
         const { holdId } = parseRes.data;
-        const released = await bookingService.releaseHold(holdId);
+
+        if (env.USE_IN_MEMORY_DB) {
+          return {
+            success: true,
+            data: { released: true, holdId },
+            userMessage: 'Slot hold release kar diya gaya hai.',
+          };
+        }
+
+        const released = await bookingService!.releaseHold(holdId);
         return {
           success: released,
           data: { released, holdId },
@@ -350,11 +409,54 @@ export async function executeAgentTool(
           idempotencyKey,
         } = parseRes.data;
 
-        const slotStartUtc = kolkataToUtc(date, startTime);
         const finalIdempotencyKey =
           idempotencyKey || `idem_${callId}_${doctorId}_${date}_${startTime}`;
 
-        const bookRes = await bookingService.bookAppointment({
+        if (env.USE_IN_MEMORY_DB) {
+          const bookRes = await db.bookAppointment({
+            doctorId,
+            date,
+            startTime,
+            patientName,
+            patientPhone,
+            idempotencyKey: finalIdempotencyKey,
+          });
+
+          if (!bookRes.success || !bookRes.appointment) {
+            let userMsg = 'Appointment book nahi ho payi.';
+            if (bookRes.error === 'OUTSIDE_WORKING_HOURS') {
+              userMsg = 'Yeh samay doctor ke OPD hours se bahar hai.';
+            } else if (bookRes.error === 'SLOT_ALREADY_BOOKED') {
+              userMsg = 'Yeh slot pehle se book ho chuka hai. Kripya doosra samay chunein.';
+            }
+            return {
+              success: false,
+              error: bookRes.error || 'BOOKING_FAILED',
+              userMessage: userMsg,
+            };
+          }
+
+          const appt = bookRes.appointment;
+          return {
+            success: true,
+            data: {
+              appointmentId: appt.id,
+              doctorName: appt.doctorName,
+              doctorId: appt.doctorId,
+              date: appt.appointmentDate || appt.displayDateKolkata,
+              startTime: appt.startTime,
+              durationMinutes: appt.durationMinutes,
+              patientName: appt.patientName,
+              patientPhoneMasked: maskPhone(patientPhone),
+              status: appt.status,
+            },
+            userMessage: `Aapki appointment Dr. ${appt.doctorName} ke saath ${appt.appointmentDate} ko ${appt.startTime} baje confirm ho gayi hai. Duration: ${appt.durationMinutes} minute.`,
+          };
+        }
+
+        const slotStartUtc = kolkataToUtc(date, startTime);
+
+        const bookRes = await bookingService!.bookAppointment({
           doctorId,
           date,
           startTime,
@@ -408,11 +510,35 @@ export async function executeAgentTool(
         }
         const { appointmentId, newDate, newStartTime, patientPhone, idempotencyKey } =
           parseRes.data;
+
+        if (env.USE_IN_MEMORY_DB) {
+          const reschedRes = await db.rescheduleAppointment(appointmentId, newDate, newStartTime);
+          if (!reschedRes.success || !reschedRes.appointment) {
+            return {
+              success: false,
+              error: reschedRes.error || 'RESCHEDULE_FAILED',
+              userMessage: 'Appointment reschedule nahi ho saki. Kripya samay dobara chunein.',
+            };
+          }
+          const appt = reschedRes.appointment;
+          return {
+            success: true,
+            data: {
+              appointmentId: appt.id,
+              doctorName: appt.doctorName,
+              newDate: appt.appointmentDate || appt.displayDateKolkata,
+              newStartTime: appt.startTime,
+              durationMinutes: appt.durationMinutes,
+            },
+            userMessage: `Aapki appointment successfully reschedule ho gayi hai. Naya samay: Dr. ${appt.doctorName}, ${appt.appointmentDate} ko ${appt.startTime} baje. Duration: ${appt.durationMinutes} minute.`,
+          };
+        }
+
         const newSlotStartUtc = kolkataToUtc(newDate, newStartTime);
         const finalIdempotencyKey =
           idempotencyKey || `resched_${callId}_${appointmentId}_${newDate}_${newStartTime}`;
 
-        const reschedRes = await bookingService.rescheduleAppointment(
+        const reschedRes = await bookingService!.rescheduleAppointment(
           appointmentId,
           newDate,
           newStartTime,
@@ -451,7 +577,31 @@ export async function executeAgentTool(
         }
         const { appointmentId, cancellationReason } = parseRes.data;
 
-        const cancelRes = await bookingService.cancelAppointment(
+        if (env.USE_IN_MEMORY_DB) {
+          const cancelRes = await db.cancelAppointment(
+            appointmentId,
+            cancellationReason || 'Cancelled by patient via voice agent'
+          );
+          if (!cancelRes.success) {
+            return {
+              success: false,
+              error: 'CANCEL_FAILED',
+              userMessage:
+                'Appointment cancel nahi ho payi. Kripya check karein ki details sahi hain.',
+            };
+          }
+          return {
+            success: true,
+            data: {
+              appointmentId,
+              status: 'CANCELLED',
+            },
+            userMessage:
+              'Aapki appointment cancel kar di gayi hai. Agar aapko dobara book karna ho toh zaroor batayein.',
+          };
+        }
+
+        const cancelRes = await bookingService!.cancelAppointment(
           appointmentId,
           cancellationReason || 'Cancelled by patient via voice agent'
         );

@@ -21,7 +21,7 @@ const EMERGENCY_PATTERNS: { category: string; regex: RegExp }[] = [
   {
     category: 'BREATHING_DIFFICULTY',
     regex:
-      /(saans\s*(nahi\s*aa\s*rahi|lene\s*m[eai]n?\s*(takleef|dikkat)|phool\s*rahi|ruk\s*rahi)|can['’]?t\s*breathe|shortness\s*of\s*breath|suffocat(ing|ion)|asphyxia?)/i,
+      /(saans\s*(nahi\s*(aa|le)\s*(pa\s*)?(rahi|raha)|lene\s*m[eai]n?\s*(takleef|dikkat)|phool\s*rahi|ruk\s*rahi)|can['’]?t\s*breathe|shortness\s*of\s*breath|suffocat(ing|ion)|asphyxia?|ghutan|choking)/i,
   },
   {
     category: 'UNCONSCIOUSNESS_COLLAPSE',

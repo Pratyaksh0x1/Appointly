@@ -64,4 +64,3 @@ export function stopTranscriptRetentionWorker(): void {
     rootLogger.info('[RetentionJob] Transcript retention worker stopped.');
   }
 }
-

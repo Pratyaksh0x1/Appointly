@@ -9,40 +9,27 @@ Appointly is an empathetic, multilingual voice assistant designed for small clin
 
 ---
 
-## Phase 8: Reliability, Security Hardening & Chaos Testing Highlights
+## Phase 9: Observability, Prometheus Metrics, Real-Time Alerts & Eval Harness Highlights
 
-- **Idempotency Keys on All Mutating Endpoints**:
-  - Mutating routes (`POST /api/chat`, `PUT /api/appointments/:id/reschedule`, `PUT /api/appointments/:id/cancel`) support `Idempotency-Key` and `X-Idempotency-Key` headers.
-  - Replays cached responses with `X-Cache-Lookup: HIT` and `X-Idempotency-Replay: true`, returning HTTP 409 Conflict for in-flight duplicates and bypassing re-execution of side effects.
-- **Transactional Outbox with Retry & Dead-Letter Status**:
-  - The `outbox` table tracks `retry_count`, `max_retries` (default 3), and `last_error`.
-  - Concurrently polled with PostgreSQL `FOR UPDATE SKIP LOCKED`. If an event exceeds maximum retries, it transitions safely to `'DEAD_LETTER'` without blocking the relay queue.
-- **Sliding-Window Rate Limiting (Per-IP & Per-Session)**:
-  - Enforces configurable rate limits (`RATE_LIMIT_MAX_PER_MINUTE`, default 120 req/min) per client IP and per session/doctor Bearer token.
-  - Returns HTTP 429 (`TOO_MANY_REQUESTS`) with standard `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `Retry-After` headers.
-- **Request Body Size Limits & Deep Input Sanitization**:
-  - Enforces `MAX_REQUEST_SIZE_BYTES` (1MB default), destroying oversized streams with HTTP 413 (`PAYLOAD_TOO_LARGE`).
-  - Defense-in-depth sanitization: strips null bytes (`\0`), ASCII control characters, and object prototype properties (`__proto__`, `constructor`, `prototype`).
-- **Enterprise Security Headers & Dynamic CORS Allowlist**:
-  - Strict enterprise headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`, `Strict-Transport-Security: max-age=31536000`, `Content-Security-Policy`, and `Permissions-Policy`.
-  - Dynamic allowlist origin checking via `CORS_ORIGIN` with `Vary: Origin`.
-- **Least-Privilege Database Roles Architecture**:
-  - Dual-role database security separating migration DDL (`appointly_admin`) from application runtime DML (`appointly_app` with `SELECT`, `INSERT`, `UPDATE`, `DELETE` only, no `DROP`/`ALTER`/`TRUNCATE`). Documented in [`docs/db-roles.md`](docs/db-roles.md) and [`scripts/setup-least-privilege-db-roles.sql`](scripts/setup-least-privilege-db-roles.sql).
-- **Automated PII & Secret Redaction in Logs & Transcripts**:
-  - Automatically masks phone numbers (`+91 ******<last4>`), 12-digit Aadhaar IDs (`****-****-****`), email addresses (`u***r@domain.com`), and Bearer tokens (`Bearer [REDACTED]`).
-  - Zero raw PII or credentials printed in application logs or stored call summaries.
-- **DPDP-Compliant Transcript Retention Worker**:
-  - Configurable retention job (`TRANSCRIPT_RETENTION_DAYS`, default 30 days) automatically purges call records older than the retention threshold.
-- **Zero Raw Audio Storage Policy**:
-  - Microphone audio chunks are processed strictly in RAM buffers for VAD and STT streaming, then immediately garbage collected. Zero raw audio files (`.wav`, `.pcm`, `.raw`) touch disk (`STORE_RAW_AUDIO=false`).
-- **Graceful Degradation Protocols**:
-  - *Voice Agent*: If STT, LLM, or TTS fail or time out, the server plays a pre-cached Hinglish apology audio chunk (`FIXED_PHRASES.FALLBACK`), persists a `callback_request` in Neon PostgreSQL, and tears down the call cleanly.
-  - *Doctor Dashboard*: If SSE connection drops, the UI automatically engages a 5-second polling fallback with badge indicator `"Polling Active (Fallback)"`, restoring `"Neon Postgres Live"` upon reconnect.
-- **Comprehensive STRIDE-Lite Threat Model**:
-  - Detailed in [`docs/threat-model.md`](docs/threat-model.md) analyzing Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, and Elevation of Privilege with honest mitigations and residual risks.
-- **50 Concurrent Calls Load Test & Chaos Test Suite**:
-  - Benchmark report in [`docs/load-test.md`](docs/load-test.md): 50 concurrent calls, 150 conversational turns completed in 7.33s with 7.2 calls/sec throughput and **0% error rate**.
-  - All automated chaos tests pass in `apps/api/tests/chaos-and-resilience.test.ts`.
+- **Standardized Structured Event Catalog (`AppointlyEvents`)**:
+  - Consistent structured events across voice turns, tool invocations, database commits, safety guardrails, and retention jobs.
+  - Guaranteed `call_id` / `request_id` correlation with automated PII masking (phones, emails, Aadhaar, credentials).
+- **Prometheus Metrics Exposition (`GET /metrics`)**:
+  - Standard Prometheus format (v0.0.4) exposing counters (`appointly_calls_total`, `appointly_bookings_total`, `appointly_emergencies_total`, `appointly_credits_burned_total`), gauges, and latency summaries (`appointly_turn_latency_ms{quantile="0.5|0.9|0.95|0.99"}`).
+  - Supports `GET /metrics?format=json` or `Accept: application/json` for programmatic telemetry consumption.
+- **Doctor Dashboard Observability & SLO Panel**:
+  - Direct UI visualization of production health: Availability SLO (99.9% target vs actual) and P95 Turn Latency SLO (< 2,000ms target vs actual).
+  - Per-stage latency percentiles table (STT, LLM First Token, TTS First Audio, Turn Total) and booking funnel conversion stats.
+- **Real-Time Alert Engine (`AlertEngine`)**:
+  - Automated detection of high error rates (> 5%), P95 turn latency breaches (> 2,000ms), and credit depletion (&ge; 90%).
+  - Logs structured alert warnings and dispatches asynchronous HTTP POST webhooks (`ALERT_WEBHOOK_URL`).
+- **Documented Service Level Objectives ([`docs/slo.md`](docs/slo.md))**:
+  - Formal 99.9% Availability and P95 turn latency under 2.0s SLOs.
+  - Honest disclosure of Neon Serverless PostgreSQL cold starts (~500ms–1.5s after 5 min idle) and our 0ms pre-cached memory audio mitigation.
+- **Comprehensive Conversational Eval Harness (`npm run eval`)**:
+  - 57 diverse Hinglish clinical scenarios across 9 categories (Direct Bookings, Slot Preference, Unavailable Slots, Reschedule, Cancel, Ambiguous Times, Medical Emergencies, Prompt Injections, Off-Topic).
+  - Strict acceptance guarantees verified in CI: **100% Emergency Triage pass rate** and **Zero Unavailable Slot Bookings**.
+  - Markdown report automatically generated at [`docs/eval-report.md`](docs/eval-report.md).
 
 ---
 

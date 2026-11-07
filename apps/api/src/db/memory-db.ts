@@ -22,7 +22,7 @@ export const INITIAL_DOCTORS: Doctor[] = [
     name: 'Dr. Ramesh Sharma',
     specialty: 'General Medicine & Family Physician',
     workingHoursStart: '09:00',
-    workingHoursEnd: '18:00',
+    workingHoursEnd: '19:00',
     durationMinutes: 30,
     fee: 500,
     activeDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],

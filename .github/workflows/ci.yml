@@ -36,6 +36,9 @@ jobs:
       - name: Run Test Suite
         run: npm test
 
+      - name: Run Conversational Eval Harness (50+ Scenarios)
+        run: npm run eval
+
       - name: Security Dependency Audit
         run: npm audit --audit-level=high
         continue-on-error: true

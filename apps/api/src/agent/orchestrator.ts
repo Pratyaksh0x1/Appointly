@@ -25,6 +25,8 @@ import { rootLogger, maskPhone } from '../logger/logger.js';
 import { formatKolkata } from '../utils/timezone.js';
 import { getDatabaseClient } from '../db/index.js';
 import { generateAndSaveCallSummary } from '../services/call-summary-service.js';
+import { globalMetrics } from '../observability/metrics.js';
+import { AppointlyEvents } from '../observability/events.js';
 
 export type AgentState =
   | 'GREETING_CONSENT'
@@ -216,6 +218,7 @@ export async function processConversationTurn(
   const injectionCheck = checkPromptInjection(rawUserInput);
   if (injectionCheck.isSuspicious) {
     rootLogger.warn(`[Security] Suspicious prompt injection detected from caller`, {
+      event: AppointlyEvents.PROMPT_INJECTION_FLAGGED,
       callId,
       threatType: injectionCheck.threatType,
     });
@@ -228,7 +231,9 @@ export async function processConversationTurn(
   const emergencyCheck = checkEmergency(sanitizedInput);
   if (emergencyCheck.isEmergency) {
     session.state = 'ESCALATE';
+    globalMetrics.recordEmergency();
     rootLogger.warn(`[Emergency Guardrail] Emergency detected! Bypassing LLM.`, {
+      event: AppointlyEvents.EMERGENCY_DETECTED,
       callId,
       matchedKeywords: emergencyCheck.matchedKeywords,
     });
@@ -387,10 +392,21 @@ export async function processConversationTurn(
 
   switch (session.state) {
     case 'GREETING_CONSENT': {
+      // If user only greeted with a short greeting phrase (e.g. "Namaste", "Hello"):
+      const isJustGreeting =
+        /^(namaste|hello|hi|pranam|good\s*(morning|afternoon|evening))\b/i.test(lower) &&
+        sanitizedInput.trim().split(/\s+/).length <= 2;
+
+      if (isJustGreeting) {
+        session.state = 'UNDERSTAND_INTENT';
+        replyText =
+          'Namaste! Arogya Clinic mein aapka swagat hai. Main aapki appointment book karne mein kaise madad kar sakti hoon?';
+        break;
+      }
+
+      // If user already expressed a clear intent or provided booking details in their opening sentence:
       session.state = 'UNDERSTAND_INTENT';
-      replyText =
-        'Namaste! Arogya Clinic mein aapka swagat hai. Main aapki appointment book karne mein kaise madad kar sakti hoon?';
-      break;
+      // fall through to UNDERSTAND_INTENT
     }
 
     case 'UNDERSTAND_INTENT': {
@@ -745,6 +761,13 @@ export async function processConversationTurn(
         );
 
         if (!bookResponse.success || !bookResponse.data) {
+          globalMetrics.recordBooking(false, bookResponse.userMessage || 'SLOT_UNAVAILABLE');
+          rootLogger.warn('Booking failed to commit in database', {
+            event: AppointlyEvents.BOOKING_FAILED,
+            callId,
+            userMessage: bookResponse.userMessage,
+            error: bookResponse.error,
+          });
           session.state = 'FALLBACK';
           replyText = `Maaf kijiye, booking commit nahi ho saki: ${bookResponse.userMessage || 'Slot available nahi hai.'} Kya main callback schedule karoon?`;
           break;
@@ -757,6 +780,16 @@ export async function processConversationTurn(
           startTime: string;
           durationMinutes: number;
         };
+
+        globalMetrics.recordBooking(true);
+        rootLogger.info('Booking confirmed and committed in database', {
+          event: AppointlyEvents.BOOKING_COMPLETED,
+          callId,
+          appointmentId: apptData.appointmentId,
+          doctorName: apptData.doctorName,
+          date: apptData.date,
+          startTime: apptData.startTime,
+        });
 
         session.confirmedBooking = {
           appointmentId: apptData.appointmentId,
@@ -904,6 +937,12 @@ export async function processConversationTurn(
       );
 
       if (!reschedRes.success || !reschedRes.data) {
+        globalMetrics.recordReschedule(false, reschedRes.userMessage || reschedRes.error);
+        rootLogger.warn('Reschedule failed in database', {
+          event: AppointlyEvents.RESCHEDULE_FAILED,
+          callId,
+          error: reschedRes.error,
+        });
         replyText = `Appointment reschedule nahi ho saki: ${reschedRes.userMessage || reschedRes.error}. Kya aap koi doosra samay chuna chahenge?`;
         break;
       }
@@ -915,6 +954,15 @@ export async function processConversationTurn(
         newStartTime: string;
         durationMinutes: number;
       };
+
+      globalMetrics.recordReschedule(true);
+      rootLogger.info('Reschedule committed successfully in database', {
+        event: AppointlyEvents.RESCHEDULE_COMPLETED,
+        callId,
+        appointmentId: reschedData.appointmentId,
+        newDate: reschedData.newDate,
+        newStartTime: reschedData.newStartTime,
+      });
 
       session.state = 'BOOKED';
       isTerminal = true;
@@ -1029,10 +1077,23 @@ export async function processConversationTurn(
         );
 
         if (!cancelRes.success) {
+          globalMetrics.recordCancel(false, cancelRes.userMessage || cancelRes.error);
+          rootLogger.warn('Cancel failed in database', {
+            event: AppointlyEvents.CANCEL_FAILED,
+            callId,
+            error: cancelRes.error,
+          });
           replyText = `Appointment cancel karne mein dikkat aayi: ${cancelRes.userMessage || cancelRes.error}`;
           session.state = 'FALLBACK';
           break;
         }
+
+        globalMetrics.recordCancel(true);
+        rootLogger.info('Cancellation confirmed in database', {
+          event: AppointlyEvents.CANCEL_COMPLETED,
+          callId,
+          appointmentId: session.appointmentId,
+        });
 
         session.state = 'CANCEL';
         isTerminal = true;

@@ -37,6 +37,9 @@ import {
   startTranscriptRetentionWorker,
   stopTranscriptRetentionWorker,
 } from './services/transcript-retention.js';
+import { globalMetrics } from './observability/metrics.js';
+import { globalAlertEngine } from './observability/alerts.js';
+import { AppointlyEvents } from './observability/events.js';
 
 let isShuttingDown = false;
 const sseClients = new Set<http.ServerResponse>();
@@ -241,6 +244,49 @@ export function createServer() {
             creditsSummary: globalCostMeter.getSummary(),
             config: getSafePublicConfig(),
           })
+        );
+        return;
+      }
+
+      // 3b. Observability: Prometheus & JSON Metrics (/metrics)
+      if (req.method === 'GET' && pathname === '/metrics') {
+        const acceptHeader = req.headers['accept'] || '';
+        const wantsJson =
+          acceptHeader.includes('application/json') ||
+          parsedUrl.searchParams.get('format') === 'json';
+
+        if (wantsJson) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(globalMetrics.getJsonSummary(), null, 2));
+        } else {
+          res.writeHead(200, {
+            'Content-Type': 'text/plain; version=0.0.4; charset=utf-8',
+          });
+          res.end(globalMetrics.toPrometheusFormat());
+        }
+        return;
+      }
+
+      // 3c. Observability: JSON Metrics for Dashboard (/api/metrics)
+      if (req.method === 'GET' && pathname === '/api/metrics') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(globalMetrics.getJsonSummary(), null, 2));
+        return;
+      }
+
+      // 3d. Observability: Active Alerts & History (/api/alerts)
+      if (req.method === 'GET' && pathname === '/api/alerts') {
+        globalAlertEngine.evaluateSystemHealth();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify(
+            {
+              activeAlerts: globalAlertEngine.getActiveAlerts(),
+              history: globalAlertEngine.getAlertHistory(),
+            },
+            null,
+            2
+          )
         );
         return;
       }
@@ -599,6 +645,7 @@ export function createServer() {
 
       // 10. Conversational Chat & Appointment Booking API
       if (req.method === 'POST' && pathname === '/api/chat') {
+        const chatStartTs = Date.now();
         const bodyRes = await readAndSanitizeJsonBody(req, res);
         if (!bodyRes.success) return;
         try {
@@ -610,6 +657,7 @@ export function createServer() {
           // NON-NEGOTIABLE RULE 4: Code-level deterministic emergency check
           const emergency = checkEmergency(userText);
           if (emergency.isEmergency) {
+            globalMetrics.recordEmergency();
             await emitOutboxEvent('emergency_alert', {
               callId,
               patientPhoneMasked: patientPhone,
@@ -617,12 +665,16 @@ export function createServer() {
               timestamp: new Date().toISOString(),
             });
 
+            const turnTotalMs = Date.now() - chatStartTs;
+            globalMetrics.recordTurnLatency({ turn_total_ms: turnTotalMs });
+
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(
               JSON.stringify({
                 replyText: emergency.escalationMessage,
                 isEmergency: true,
-                matchedKeywords: emergency.matchedKeywords,
+                matchedTriggers: emergency.matchedKeywords,
+                callId,
               })
             );
             return;
@@ -718,6 +770,10 @@ export function createServer() {
             }
           }
 
+          const turnTotalMs = Date.now() - chatStartTs;
+          globalMetrics.recordTurnLatency({ turn_total_ms: turnTotalMs });
+          globalAlertEngine.evaluateSystemHealth();
+
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(
             JSON.stringify({
@@ -727,6 +783,8 @@ export function createServer() {
             })
           );
         } catch (chatErr) {
+          globalMetrics.recordFailure('API_CHAT_ERROR');
+          globalAlertEngine.evaluateSystemHealth();
           rootLogger.error('Error in /api/chat:', chatErr);
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: String(chatErr) }));
