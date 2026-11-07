@@ -39,6 +39,10 @@ import {
 } from './services/transcript-retention.js';
 import { globalMetrics } from './observability/metrics.js';
 import { processLiveVoiceTurn, isGeminiConfigured } from './services/gemini-service.js';
+import {
+  transcribeAudioWithGnani,
+  synthesizeSpeechWithGnani,
+} from './services/gnani-voice-service.js';
 import { globalAlertEngine } from './observability/alerts.js';
 import { AppointlyEvents } from './observability/events.js';
 import { Doctor } from './types/index.js';
@@ -744,19 +748,100 @@ export function createServer() {
         }
       }
 
-      // 8e. Gemini Live Voice Call Turn Endpoint
+      // 8e. Gnani Prisma STT Endpoint
+      if (req.method === 'POST' && pathname === '/api/voice/stt') {
+        const bodyRes = await readAndSanitizeJsonBody(req, res);
+        if (!bodyRes.success) return;
+        try {
+          const { audioBase64, languageCode } = bodyRes.data || {};
+          if (!audioBase64) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'MISSING_AUDIO', message: 'audioBase64 is required' }));
+            return;
+          }
+          const base64Clean = audioBase64.replace(/^data:audio\/\w+;base64,/, '');
+          const audioBuf = Buffer.from(base64Clean, 'base64');
+          const sttRes = await transcribeAudioWithGnani(audioBuf, `stt_${Date.now()}`, { languageCode });
+          res.writeHead(sttRes.success ? 200 : 500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(sttRes));
+        } catch (err: any) {
+          rootLogger.error('[STT] Endpoint error:', err);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+      }
+
+      // 8f. Gnani Timbre TTS Endpoint
+      if (req.method === 'POST' && pathname === '/api/voice/tts') {
+        const bodyRes = await readAndSanitizeJsonBody(req, res);
+        if (!bodyRes.success) return;
+        try {
+          const { text, voice, speed } = bodyRes.data || {};
+          if (!text) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'MISSING_TEXT', message: 'text is required' }));
+            return;
+          }
+          const ttsRes = await synthesizeSpeechWithGnani(text, `tts_${Date.now()}`, { voice, speed });
+          res.writeHead(ttsRes.success ? 200 : 500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(ttsRes));
+        } catch (err: any) {
+          rootLogger.error('[TTS] Endpoint error:', err);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+        return;
+      }
+
+      // 8g. Live Voice Call Turn Endpoint (Gnani STT -> Clinic Agent -> Gnani TTS)
       if (req.method === 'POST' && (pathname === '/api/call/turn' || pathname === '/api/voice/turn')) {
         const bodyRes = await readAndSanitizeJsonBody(req, res);
         if (!bodyRes.success) return;
         try {
-          const { userText, callId, history } = bodyRes.data || {};
+          let { userText, audioBase64, callId, history } = bodyRes.data || {};
+          callId = callId || `call_${Date.now()}`;
+
+          // 1. If audioBase64 is passed, transcribe with Gnani Prisma STT!
+          if (audioBase64 && (!userText || userText.trim().length === 0)) {
+            try {
+              const base64Clean = audioBase64.replace(/^data:audio\/\w+;base64,/, '');
+              const audioBuf = Buffer.from(base64Clean, 'base64');
+              const sttRes = await transcribeAudioWithGnani(audioBuf, callId);
+              if (sttRes.success && sttRes.transcript) {
+                userText = sttRes.transcript;
+              }
+            } catch (sttErr: any) {
+              rootLogger.warn('[Gnani STT] Audio transcription error:', sttErr.message);
+            }
+          }
+
+          // 2. Process clinical turn with Indic engine / orchestrator
           const turnResult = await processLiveVoiceTurn({
             userText: userText || '',
-            callId: callId || `call_${Date.now()}`,
+            callId,
             history: history || [],
           });
+
+          // 3. Synthesize speech using Gnani Timbre TTS!
+          let audioBase64Out = '';
+          try {
+            const ttsRes = await synthesizeSpeechWithGnani(turnResult.replyText, callId);
+            if (ttsRes.success && ttsRes.audioBase64) {
+              audioBase64Out = ttsRes.audioBase64;
+            }
+          } catch (ttsErr: any) {
+            rootLogger.warn('[Gnani TTS] Speech synthesis error:', ttsErr.message);
+          }
+
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(turnResult));
+          res.end(
+            JSON.stringify({
+              ...turnResult,
+              transcript: userText || '',
+              audioBase64: audioBase64Out,
+            })
+          );
         } catch (err: any) {
           rootLogger.error('Error in live call turn:', err);
           res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -765,13 +850,15 @@ export function createServer() {
         return;
       }
 
-      // 8f. Gemini AI Status Probe
-      if (req.method === 'GET' && pathname === '/api/config/gemini') {
+      // 8h. Voice AI Status Probe
+      if (req.method === 'GET' && pathname === '/api/config/voice') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
           JSON.stringify({
-            configured: isGeminiConfigured(),
-            model: 'gemini-2.5-flash',
+            stt: 'Gnani Prisma v3.0 (indic-auto / codemix)',
+            tts: 'Gnani Timbre v3.0 (Shivani, hi-IN)',
+            hasGnaniKey: Boolean(env.GNANI_API_KEY),
+            geminiConfigured: isGeminiConfigured(),
           })
         );
         return;

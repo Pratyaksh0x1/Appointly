@@ -156,7 +156,7 @@ export class GnaniSttAdapter implements SttProvider {
           formData.append('audio_file', audioBlob, 'audio.wav');
           formData.append('model', options?.model || 'prisma-v3.0');
           formData.append('language_code', options?.languageCode || 'indic-auto');
-          formData.append('format', options?.format || 'code-mix');
+          formData.append('format', options?.format || 'codemix');
 
           const response = await fetch(this.endpointUrl, {
             method: 'POST',

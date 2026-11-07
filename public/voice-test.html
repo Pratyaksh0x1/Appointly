@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Appointly — Live Clinic Voice Call</title>
+    <title>Appointly — Clinic Voice Call (Gnani AI)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -12,17 +12,18 @@
     />
     <style>
       :root {
-        --bg-gradient: radial-gradient(circle at 50% 20%, #1e1b4b 0%, #0f172a 100%);
-        --phone-bg: #0b0f19;
-        --phone-border: #1e293b;
-        --accent: #8b5cf6;
-        --accent-glow: rgba(139, 92, 246, 0.4);
-        --success: #10b981;
+        --bg-main: #212121;
+        --bg-surface: #2f2f2f;
+        --bg-hover: #383838;
+        --border: rgba(255, 255, 255, 0.1);
+        --text-primary: #ececec;
+        --text-secondary: #b4b4b4;
+        --text-muted: #8e8e8e;
+        --accent-green: #10a37f;
+        --accent-green-hover: #1a7f64;
         --danger: #ef4444;
-        --text: #f8fafc;
-        --text-muted: #94a3b8;
-        --glass-bg: rgba(255, 255, 255, 0.04);
-        --glass-border: rgba(255, 255, 255, 0.08);
+        --danger-hover: #dc2626;
+        --gnani-purple: #8b5cf6;
       }
 
       * {
@@ -32,579 +33,756 @@
       }
 
       body {
-        font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-        background: var(--bg-gradient);
-        color: var(--text);
+        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+        background-color: var(--bg-main);
+        color: var(--text-primary);
         min-height: 100vh;
         display: flex;
         flex-direction: column;
+        overflow: hidden;
+      }
+
+      /* Top Navigation Bar */
+      .chat-header {
+        height: 56px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 20px;
+        background: rgba(33, 33, 33, 0.95);
+        backdrop-filter: blur(12px);
+        z-index: 50;
+      }
+
+      .header-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .header-title {
+        font-weight: 700;
+        font-size: 0.95rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #fff;
+      }
+
+      .gnani-badge {
+        font-size: 0.72rem;
+        background: rgba(139, 92, 246, 0.16);
+        border: 1px solid rgba(139, 92, 246, 0.35);
+        color: #c4b5fd;
+        padding: 3px 8px;
+        border-radius: 9999px;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .header-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .btn-dash {
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+        padding: 6px 14px;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .btn-dash:hover {
+        background: var(--bg-hover);
+        color: #fff;
+      }
+
+      /* Main Chat History Stream */
+      .chat-main {
+        flex: 1;
+        overflow-y: auto;
+        padding: 24px 16px 120px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .chat-stream-container {
+        width: 100%;
+        max-width: 760px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      /* Empty State (ChatGPT Welcome View) */
+      .empty-state {
+        margin-top: 60px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        max-width: 620px;
+      }
+
+      .empty-avatar {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #10a37f 0%, #059669 100%);
+        display: flex;
         align-items: center;
         justify-content: center;
-        padding: 20px;
+        font-size: 28px;
+        margin-bottom: 20px;
+        box-shadow: 0 0 30px rgba(16, 163, 127, 0.3);
       }
 
-      .top-nav {
+      .empty-title {
+        font-size: 1.6rem;
+        font-weight: 800;
+        color: #fff;
+        margin-bottom: 8px;
+      }
+
+      .empty-subtitle {
+        font-size: 0.95rem;
+        color: var(--text-secondary);
+        line-height: 1.55;
+        margin-bottom: 32px;
+      }
+
+      .prompt-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
         width: 100%;
-        max-width: 440px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 14px;
+        text-align: left;
       }
 
-      .btn-nav {
-        background: var(--glass-bg);
-        border: 1px solid var(--glass-border);
+      @media (max-width: 640px) {
+        .prompt-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .prompt-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px 16px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .prompt-card:hover {
+        background: var(--bg-hover);
+        border-color: rgba(255, 255, 255, 0.2);
+        transform: translateY(-1px);
+      }
+
+      .prompt-card-title {
+        font-size: 0.88rem;
+        font-weight: 600;
+        color: #fff;
+        margin-bottom: 4px;
+      }
+
+      .prompt-card-sub {
+        font-size: 0.78rem;
         color: var(--text-muted);
-        padding: 6px 12px;
+      }
+
+      /* Message Rows */
+      .msg-row {
+        width: 100%;
+        display: flex;
+        margin-bottom: 6px;
+        animation: fadeIn 0.25s ease-out;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* User Message (Right-aligned bubble) */
+      .msg-row.user {
+        justify-content: flex-end;
+      }
+
+      .msg-bubble-user {
+        background: var(--bg-surface);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+        border-radius: 18px 18px 4px 18px;
+        padding: 12px 18px;
+        max-width: 82%;
+        font-size: 0.94rem;
+        line-height: 1.5;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      }
+
+      .msg-meta {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        margin-bottom: 4px;
+        font-weight: 600;
+      }
+
+      /* Assistant Message (Left-aligned ChatGPT style) */
+      .msg-row.assistant {
+        justify-content: flex-start;
+        gap: 14px;
+      }
+
+      .assistant-avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: #10a37f;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        color: #fff;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      }
+
+      .assistant-content-box {
+        flex: 1;
+        max-width: 86%;
+      }
+
+      .assistant-header-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+      }
+
+      .assistant-sender {
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #fff;
+      }
+
+      .msg-bubble-assistant {
+        color: var(--text-primary);
+        font-size: 0.95rem;
+        line-height: 1.6;
+        word-break: break-word;
+      }
+
+      .msg-bubble-assistant strong {
+        color: #fff;
+        font-weight: 700;
+      }
+
+      .msg-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 8px;
+      }
+
+      .btn-action-small {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        padding: 3px 8px;
+        border-radius: 6px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: all 0.15s ease;
+      }
+
+      .btn-action-small:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+      }
+
+      /* System / Status Messages */
+      .msg-row.system {
+        justify-content: center;
+      }
+
+      .msg-bubble-system {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px dashed var(--border);
+        color: var(--text-muted);
+        border-radius: 20px;
+        padding: 6px 14px;
+        font-size: 0.78rem;
+        font-family: 'JetBrains Mono', monospace;
+      }
+
+      /* Typing indicator */
+      .typing-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 8px 12px;
+        background: var(--bg-surface);
+        border-radius: 12px;
+        border: 1px solid var(--border);
+      }
+
+      .typing-dot {
+        width: 6px;
+        height: 6px;
+        background: var(--text-muted);
+        border-radius: 50%;
+        animation: typingBounce 1.4s infinite ease-in-out;
+      }
+
+      .typing-dot:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      .typing-dot:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+
+      @keyframes typingBounce {
+        0%, 80%, 100% {
+          transform: translateY(0);
+          opacity: 0.4;
+        }
+        40% {
+          transform: translateY(-5px);
+          opacity: 1;
+        }
+      }
+
+      /* Bottom Bar: The ChatGPT Calling Container */
+      .chat-bottom-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 16px 20px 24px;
+        background: linear-gradient(180deg, rgba(33, 33, 33, 0) 0%, rgba(33, 33, 33, 0.95) 30%, #212121 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        z-index: 40;
+      }
+
+      .bottom-inner-container {
+        width: 100%;
+        max-width: 760px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* Capsule Bar */
+      .call-capsule {
+        width: 100%;
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 32px;
+        padding: 8px 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+        transition: all 0.25s ease;
+      }
+
+      .call-capsule.active-call {
+        border-color: rgba(16, 163, 127, 0.5);
+        box-shadow: 0 0 25px rgba(16, 163, 127, 0.2), 0 8px 30px rgba(0, 0, 0, 0.4);
+      }
+
+      /* Idle State in Capsule: Big Start Call Button */
+      .capsule-idle-layout {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px 6px;
+      }
+
+      .idle-hint-text {
+        font-size: 0.88rem;
+        color: var(--text-muted);
+        padding-left: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .btn-start-call {
+        background: var(--accent-green);
+        color: #fff;
+        border: none;
+        border-radius: 24px;
+        padding: 12px 28px;
+        font-size: 0.95rem;
+        font-weight: 700;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 14px rgba(16, 163, 127, 0.35);
+      }
+
+      .btn-start-call:hover {
+        background: var(--accent-green-hover);
+        transform: scale(1.02);
+      }
+
+      /* Active Call State in Capsule */
+      .capsule-active-layout {
+        width: 100%;
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        padding: 4px 8px;
+      }
+
+      .call-status-group {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .call-live-pill {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(16, 163, 127, 0.15);
+        border: 1px solid rgba(16, 163, 127, 0.3);
+        color: #6ee7b7;
+        font-size: 0.78rem;
+        font-weight: 700;
+        padding: 4px 10px;
         border-radius: 9999px;
-        font-size: 0.8rem;
-        text-decoration: none;
+      }
+
+      .live-pulse-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #10a37f;
+        box-shadow: 0 0 10px #10a37f;
+        animation: pulseRing 1.5s infinite;
+      }
+
+      @keyframes pulseRing {
+        0% { transform: scale(0.95); opacity: 0.8; }
+        50% { transform: scale(1.25); opacity: 1; }
+        100% { transform: scale(0.95); opacity: 0.8; }
+      }
+
+      .call-timer {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.82rem;
+        color: var(--text-primary);
+        font-weight: 600;
+      }
+
+      .call-action-status {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      /* Audio Waveform Bars */
+      .waveform-box {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        height: 18px;
+      }
+
+      .wave-bar {
+        width: 3px;
+        height: 4px;
+        background: #10a37f;
+        border-radius: 2px;
+        transition: height 0.1s ease;
+      }
+
+      .waveform-box.active .wave-bar:nth-child(1) { animation: wave 0.8s infinite ease-in-out; }
+      .waveform-box.active .wave-bar:nth-child(2) { animation: wave 0.6s infinite ease-in-out 0.1s; }
+      .waveform-box.active .wave-bar:nth-child(3) { animation: wave 0.9s infinite ease-in-out 0.2s; }
+      .waveform-box.active .wave-bar:nth-child(4) { animation: wave 0.7s infinite ease-in-out 0.3s; }
+      .waveform-box.active .wave-bar:nth-child(5) { animation: wave 0.8s infinite ease-in-out 0.15s; }
+
+      @keyframes wave {
+        0%, 100% { height: 4px; }
+        50% { height: 18px; }
+      }
+
+      .call-controls-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .btn-mic-toggle {
+        background: var(--bg-hover);
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        transition: all 0.2s;
+      }
+
+      .btn-mic-toggle.muted {
+        background: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+        border-color: rgba(239, 68, 68, 0.4);
+      }
+
+      .btn-end-call {
+        background: var(--danger);
+        color: #fff;
+        border: none;
+        border-radius: 24px;
+        padding: 9px 20px;
+        font-size: 0.88rem;
+        font-weight: 700;
+        cursor: pointer;
         display: flex;
         align-items: center;
         gap: 6px;
         transition: all 0.2s ease;
       }
 
-      .btn-nav:hover {
-        color: #fff;
-        background: rgba(255, 255, 255, 0.08);
-        border-color: rgba(255, 255, 255, 0.2);
+      .btn-end-call:hover {
+        background: var(--danger-hover);
       }
 
-      .ai-badge {
-        font-size: 0.72rem;
-        background: rgba(139, 92, 246, 0.2);
-        border: 1px solid rgba(139, 92, 246, 0.4);
-        color: #c4b5fd;
-        padding: 4px 10px;
-        border-radius: 9999px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .ai-pulse-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: #10b981;
-        box-shadow: 0 0 8px #10b981;
-      }
-
-      /* Smartphone Frame */
-      .phone-frame {
-        width: 100%;
-        max-width: 420px;
-        height: 780px;
-        max-height: 92vh;
-        background: var(--phone-bg);
-        border: 2px solid var(--phone-border);
-        border-radius: 44px;
-        box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 40px rgba(139, 92, 246, 0.15);
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        position: relative;
-      }
-
-      /* Phone Dynamic Island / Speaker */
-      .phone-notch {
-        width: 120px;
-        height: 24px;
-        background: #000;
-        border-radius: 0 0 16px 16px;
-        margin: 0 auto;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        z-index: 10;
-      }
-
-      .camera-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #1e293b;
-      }
-
-      .speaker-slot {
-        width: 40px;
-        height: 4px;
-        border-radius: 2px;
-        background: #1e293b;
-      }
-
-      /* Call Screen Header */
-      .call-header {
-        padding: 20px 24px 10px;
-        text-align: center;
-        position: relative;
-      }
-
-      .clinic-name {
-        font-size: 1.25rem;
-        font-weight: 800;
-        letter-spacing: -0.01em;
-        color: #ffffff;
-      }
-
-      .doctor-subtitle {
-        font-size: 0.85rem;
-        color: #a78bfa;
-        margin-top: 2px;
-      }
-
-      .call-status-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        margin-top: 10px;
-        padding: 4px 14px;
-        border-radius: 9999px;
-        font-size: 0.78rem;
-        font-weight: 600;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        color: var(--text-muted);
-      }
-
-      .call-status-pill.active {
-        background: rgba(16, 185, 129, 0.15);
-        border-color: rgba(16, 185, 129, 0.3);
-        color: #6ee7b7;
-      }
-
-      /* Avatar & Soundwaves */
-      .avatar-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 16px 20px;
-        position: relative;
-      }
-
-      .avatar-ripple-box {
-        position: relative;
-        width: 110px;
-        height: 110px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .avatar-ripple {
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        border-radius: 50%;
-        border: 2px solid var(--accent);
-        opacity: 0;
-        transform: scale(0.9);
-      }
-
-      .calling .avatar-ripple {
-        animation: ripple 2s infinite cubic-bezier(0.2, 0.8, 0.2, 1);
-      }
-
-      @keyframes ripple {
-        0% {
-          transform: scale(0.9);
-          opacity: 0.8;
-        }
-        100% {
-          transform: scale(1.6);
-          opacity: 0;
-        }
-      }
-
-      .avatar-circle {
-        width: 88px;
-        height: 88px;
-        border-radius: 50%;
-        background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
-        border: 3px solid rgba(255, 255, 255, 0.2);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 2.4rem;
-        box-shadow: 0 10px 25px -5px rgba(124, 58, 237, 0.5);
-        z-index: 2;
-        transition: transform 0.3s ease;
-      }
-
-      .avatar-circle.talking {
-        transform: scale(1.06);
-        box-shadow: 0 0 35px rgba(139, 92, 246, 0.8);
-      }
-
-      /* Waveform visualizer */
-      .waveform-bar-container {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 4px;
-        height: 36px;
-        margin-top: 10px;
-      }
-
-      .waveform-bar {
-        width: 4px;
-        height: 8px;
-        background: #6366f1;
-        border-radius: 2px;
-        transition: height 0.1s ease;
-      }
-
-      .waveform-bar.active {
-        animation: waveAnim 0.8s ease-in-out infinite alternate;
-      }
-
-      @keyframes waveAnim {
-        0% { height: 6px; background: #6366f1; }
-        50% { height: 28px; background: #a855f7; }
-        100% { height: 12px; background: #38bdf8; }
-      }
-
-      /* Live Captions / Transcript Chat Box */
-      .transcript-container {
-        flex: 1;
-        margin: 0 16px 12px;
-        background: rgba(15, 23, 42, 0.6);
-        border: 1px solid var(--glass-border);
-        border-radius: 20px;
-        padding: 14px;
-        overflow-y: auto;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        scroll-behavior: smooth;
-      }
-
-      .bubble {
-        max-width: 86%;
-        padding: 10px 14px;
-        border-radius: 16px;
-        font-size: 0.84rem;
-        line-height: 1.45;
-        animation: fadeIn 0.25s ease forwards;
-      }
-
-      @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(6px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-
-      .bubble.agent {
-        align-self: flex-start;
-        background: rgba(124, 58, 237, 0.25);
-        border: 1px solid rgba(139, 92, 246, 0.35);
-        color: #f1f5f9;
-        border-bottom-left-radius: 4px;
-      }
-
-      .bubble.user {
-        align-self: flex-end;
-        background: #2563eb;
-        color: #ffffff;
-        border-bottom-right-radius: 4px;
-      }
-
-      .bubble.system-alert {
-        align-self: center;
-        background: rgba(239, 68, 68, 0.2);
-        border: 1px solid rgba(239, 68, 68, 0.4);
-        color: #fca5a5;
-        font-size: 0.78rem;
-        text-align: center;
-      }
-
-      .bubble.booked-success {
-        align-self: center;
-        background: rgba(16, 185, 129, 0.2);
-        border: 1px solid rgba(16, 185, 129, 0.4);
-        color: #86efac;
-        font-size: 0.78rem;
-        text-align: center;
-        font-weight: 600;
-      }
-
-      /* Quick Suggested Prompts */
-      .quick-chips-container {
-        padding: 0 16px 10px;
-        display: flex;
-        gap: 6px;
-        overflow-x: auto;
-        white-space: nowrap;
-        scrollbar-width: none;
-      }
-
-      .quick-chips-container::-webkit-scrollbar {
-        display: none;
-      }
-
-      .chip-btn {
-        background: var(--glass-bg);
-        border: 1px solid var(--glass-border);
-        color: #cbd5e1;
-        padding: 6px 12px;
-        border-radius: 9999px;
+      /* Secondary prompt bar (optional text toggle) */
+      .bottom-sub-hint {
         font-size: 0.74rem;
+        color: var(--text-muted);
+        text-align: center;
+      }
+
+      .text-toggle-btn {
+        background: none;
+        border: none;
+        color: #94a3b8;
+        text-decoration: underline;
         cursor: pointer;
-        transition: all 0.15s ease;
-        display: flex;
-        align-items: center;
-        gap: 4px;
+        font-size: 0.74rem;
       }
 
-      .chip-btn:hover {
-        background: rgba(255, 255, 255, 0.1);
-        border-color: rgba(255, 255, 255, 0.25);
-        color: #fff;
-      }
-
-      /* Manual Text Input Bar */
-      .input-bar {
-        padding: 0 16px 12px;
-        display: flex;
+      .manual-input-row {
+        width: 100%;
+        display: none;
+        margin-top: 6px;
         gap: 8px;
       }
 
-      .text-field {
+      .manual-input {
         flex: 1;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid var(--glass-border);
-        border-radius: 9999px;
-        padding: 8px 16px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
         color: #fff;
-        font-size: 0.85rem;
-        font-family: inherit;
+        border-radius: 12px;
+        padding: 8px 14px;
+        font-size: 0.88rem;
         outline: none;
       }
 
-      .text-field:focus {
-        border-color: var(--accent);
-        box-shadow: 0 0 0 2px var(--accent-glow);
+      .manual-input:focus {
+        border-color: rgba(255, 255, 255, 0.3);
       }
 
-      .btn-send {
-        background: var(--accent);
-        border: none;
+      .btn-manual-send {
+        background: var(--bg-hover);
+        border: 1px solid var(--border);
         color: #fff;
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        border-radius: 12px;
+        padding: 8px 16px;
+        font-size: 0.88rem;
         cursor: pointer;
-      }
-
-      /* Call Controls Footer */
-      .call-controls {
-        background: rgba(11, 15, 25, 0.9);
-        border-top: 1px solid var(--phone-border);
-        padding: 16px 24px 24px;
-        display: flex;
-        align-items: center;
-        justify-content: space-around;
-      }
-
-      .control-btn {
-        width: 54px;
-        height: 54px;
-        border-radius: 50%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        border: none;
-        cursor: pointer;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        color: #fff;
-        position: relative;
-      }
-
-      .control-btn.btn-mic {
-        background: #1e293b;
-        font-size: 1.3rem;
-      }
-
-      .control-btn.btn-mic.recording {
-        background: #dc2626;
-        box-shadow: 0 0 20px rgba(220, 38, 38, 0.7);
-        animation: pulseMic 1.2s infinite;
-      }
-
-      @keyframes pulseMic {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.1); }
-      }
-
-      .control-btn.btn-dial {
-        background: #10b981;
-        width: 66px;
-        height: 66px;
-        font-size: 1.6rem;
-        box-shadow: 0 8px 25px -4px rgba(16, 185, 129, 0.5);
-      }
-
-      .control-btn.btn-hangup {
-        background: #ef4444;
-        width: 66px;
-        height: 66px;
-        font-size: 1.6rem;
-        box-shadow: 0 8px 25px -4px rgba(239, 68, 68, 0.5);
-      }
-
-      .control-btn:hover {
-        transform: translateY(-2px);
-      }
-
-      .control-btn:active {
-        transform: translateY(1px);
-      }
-
-      .btn-label {
-        font-size: 0.65rem;
-        color: var(--text-muted);
-        margin-top: 4px;
       }
     </style>
   </head>
   <body>
-    <!-- Top Bar Navigation -->
-    <div class="top-nav">
-      <a href="/" class="btn-nav" target="_blank" title="Open Doctor Dashboard in new tab">
-        <span>👨‍⚕️</span> Doctor Dashboard ↗
-      </a>
-      <div class="ai-badge">
-        <span class="ai-pulse-dot"></span>
-        <span id="aiModelBadge">Gemini 2.5 Live</span>
-      </div>
-    </div>
-
-    <!-- Realistic Mobile Call Device -->
-    <div class="phone-frame" id="phoneContainer">
-      <!-- Notch / Dynamic Island -->
-      <div class="phone-notch">
-        <div class="speaker-slot"></div>
-        <div class="camera-dot"></div>
-      </div>
-
-      <!-- Call Header -->
-      <div class="call-header">
-        <div class="clinic-name" id="clinicNameDisplay">Clinic AI Receptionist</div>
-        <div class="doctor-subtitle" id="doctorSubtitleDisplay">AI Voice Assistant</div>
-        <div class="call-status-pill" id="callStatusPill">
-          <span>⚪</span>
-          <span id="callStatusText">Ready to Dial</span>
+    <!-- Top Navigation Bar (ChatGPT style) -->
+    <header class="chat-header">
+      <div class="header-left">
+        <span style="font-size: 1.25rem;">🩺</span>
+        <div class="header-title">
+          <span id="navClinicTitle">Clinic Voice Reception</span>
+        </div>
+        <div class="gnani-badge" title="Powered strictly by Gnani.ai Prisma STT & Timbre TTS">
+          <span>⚡</span>
+          <span>Gnani Prisma &amp; Timbre</span>
         </div>
       </div>
+      <div class="header-right">
+        <a href="/" class="btn-dash">
+          👨‍⚕️ Doctor Dashboard &rarr;
+        </a>
+      </div>
+    </header>
 
-      <!-- Avatar & Sound Waves -->
-      <div class="avatar-container" id="avatarArea">
-        <div class="avatar-ripple-box">
-          <div class="avatar-ripple"></div>
-          <div class="avatar-circle" id="avatarCircle">👩‍⚕️</div>
-        </div>
+    <!-- Main Chat Messages History -->
+    <main class="chat-main" id="chatMain">
+      <div class="chat-stream-container" id="chatStream">
+        <!-- Empty State View before call begins -->
+        <div class="empty-state" id="emptyStateView">
+          <div class="empty-avatar">🎙️</div>
+          <h1 class="empty-title" id="emptyClinicName">Clinic Voice Receptionist</h1>
+          <p class="empty-subtitle">
+            A real-time voice call agent powered strictly by <strong>Gnani Prisma STT</strong> &amp; <strong>Timbre TTS</strong>.
+            Click <strong>"Start Voice Call"</strong> below to speak in natural Hindi, English, or Hinglish.
+          </p>
 
-        <div class="waveform-bar-container" id="waveformContainer">
-          <div class="waveform-bar"></div>
-          <div class="waveform-bar"></div>
-          <div class="waveform-bar"></div>
-          <div class="waveform-bar"></div>
-          <div class="waveform-bar"></div>
-          <div class="waveform-bar"></div>
-          <div class="waveform-bar"></div>
+          <div class="prompt-grid">
+            <div class="prompt-card" onclick="handlePromptClick('Mujhe kal subah Dr. ke paas appointment book karna hai')">
+              <div class="prompt-card-title">📅 Book Appointment</div>
+              <div class="prompt-card-sub">"Mujhe kal subah Dr. ke paas appointment chahiye"</div>
+            </div>
+            <div class="prompt-card" onclick="handlePromptClick('Clinic me kaunse doctors hain aur OPD timings kya hain?')">
+              <div class="prompt-card-title">⏰ Check Timings &amp; Doctors</div>
+              <div class="prompt-card-sub">"Clinic me kaunse doctors hain aur fees kya hai?"</div>
+            </div>
+            <div class="prompt-card" onclick="handlePromptClick('Mujhe apna appointment reschedule karna hai')">
+              <div class="prompt-card-title">🔄 Reschedule Slot</div>
+              <div class="prompt-card-sub">"Mujhe apna booked appointment badalna hai"</div>
+            </div>
+            <div class="prompt-card" onclick="handlePromptClick('Severe chest pain aur saas lene me takleef ho rahi hai')">
+              <div class="prompt-card-title">🚨 Emergency Protocol Test</div>
+              <div class="prompt-card-sub">"Severe chest pain and difficulty breathing"</div>
+            </div>
+          </div>
         </div>
       </div>
+    </main>
 
-      <!-- Live Captions & Conversation Stream -->
-      <div class="transcript-container" id="transcriptBox">
-        <div class="bubble agent" id="initialGreetingBubble">
-          Namaste! Clinic AI Receptionist mein aapka swagat hai. Niche green call button daba kar live baat shuru karein.
-        </div>
-      </div>
+    <!-- Bottom Action Bar (The Calling Replacement for text input) -->
+    <footer class="chat-bottom-bar">
+      <div class="bottom-inner-container">
+        <div class="call-capsule" id="callCapsule">
+          <!-- State A: Idle (Ready to Call) -->
+          <div class="capsule-idle-layout" id="capsuleIdle">
+            <div class="idle-hint-text">
+              <span>🎙️</span>
+              <span>Speak in Hindi, English or Hinglish • Zero typing needed</span>
+            </div>
+            <button class="btn-start-call" id="btnStartCall" onclick="startVoiceCall()">
+              <span>📞</span>
+              <span>Start Voice Call / बात शुरू करें</span>
+            </button>
+          </div>
 
-      <!-- Quick Dialogue Scenario Chips -->
-      <div class="quick-chips-container">
-        <button class="chip-btn" onclick="sendQuickPrompt('Mujhe kal appointment book karna hai.')">
-          📅 Book Kal Appointment
-        </button>
-        <button class="chip-btn" onclick="sendQuickPrompt('Clinic ki OPD timing aur consultation fee kya hai?')">
-          ⏰ Timing &amp; Fee
-        </button>
-        <button class="chip-btn" onclick="sendQuickPrompt('Doctor jaldi aaiye, emergency hai, chest pain ho raha hai!')">
-          🚨 Emergency
-        </button>
-        <button class="chip-btn" onclick="sendQuickPrompt('Mera registered phone number 9876543210 hai, appointment cancel kar dijiye.')">
-          ❌ Cancel Slot
-        </button>
-      </div>
+          <!-- State B: In-Call (Active Call Mode) -->
+          <div class="capsule-active-layout" id="capsuleActive">
+            <div class="call-status-group">
+              <div class="call-live-pill">
+                <span class="live-pulse-dot"></span>
+                <span>IN CALL</span>
+              </div>
+              <div class="call-timer" id="callTimer">00:00</div>
+            </div>
 
-      <!-- Manual Input Option -->
-      <div class="input-bar">
-        <input
-          type="text"
-          id="manualTextInput"
-          class="text-field"
-          placeholder="Speak or type Hinglish message..."
-          onkeydown="if(event.key==='Enter') sendManualText()"
-        />
-        <button class="btn-send" onclick="sendManualText()" title="Send Message">➤</button>
-      </div>
+            <div class="call-action-status">
+              <div class="waveform-box" id="waveformBox">
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+              </div>
+              <span id="callStatusText">Connecting call...</span>
+            </div>
 
-      <!-- Call Controls (Dial / Mic / End Call) -->
-      <div class="call-controls">
-        <!-- Mic Button -->
-        <div style="text-align: center">
-          <button class="control-btn btn-mic" id="btnMic" onclick="toggleMicrophone()" title="Toggle Voice Mic">
-            🎙️
-          </button>
-          <div class="btn-label" id="micLabel">Mic Off</div>
-        </div>
-
-        <!-- Main Call Action Button (Dial / Hangup) -->
-        <div style="text-align: center">
-          <button class="control-btn btn-dial" id="btnCallAction" onclick="toggleCall()" title="Start Live Call">
-            📞
-          </button>
-          <div class="btn-label" id="callActionLabel">Call Clinic</div>
+            <div class="call-controls-group">
+              <button class="btn-mic-toggle" id="btnMicToggle" onclick="toggleMute()" title="Mute/Unmute Mic">
+                🎙️
+              </button>
+              <button class="btn-end-call" id="btnEndCall" onclick="endVoiceCall()">
+                <span>🔴</span>
+                <span>End Call</span>
+              </button>
+            </div>
+          </div>
         </div>
 
-        <!-- Speaker Button -->
-        <div style="text-align: center">
-          <button class="control-btn btn-mic" id="btnSpeaker" onclick="toggleSpeaker()" title="Toggle Voice Speaker">
-            🔊
-          </button>
-          <div class="btn-label" id="speakerLabel">Speaker On</div>
+        <!-- Optional Text Fallback Toggle -->
+        <div class="bottom-sub-hint">
+          Telephony speech recognition via Gnani Prisma v3.0 • Voice via Gnani Timbre Shivani •
+          <button class="text-toggle-btn" onclick="toggleManualInput()">Test with text prompt</button>
+        </div>
+
+        <div class="manual-input-row" id="manualInputRow">
+          <input
+            type="text"
+            id="manualTextInput"
+            class="manual-input"
+            placeholder="Type your message in Hindi or English (optional fallback)..."
+            onkeydown="if(event.key === 'Enter') submitManualText()"
+          />
+          <button class="btn-manual-send" onclick="submitManualText()">Send</button>
         </div>
       </div>
-    </div>
+    </footer>
 
     <script>
+      // ==========================================
+      // STATE MANAGEMENT
+      // ==========================================
       let isCallActive = false;
-      let isRecording = false;
-      let isSpeakerOn = true;
-      let callTimer = null;
+      let isMuted = false;
+      let callTimerInterval = null;
       let callSeconds = 0;
-      let callId = 'call_' + Date.now();
+      let activeCallId = null;
+      let clinicProfile = null;
       let conversationHistory = [];
-      let speechRecognizer = null;
-      let isSpeakingAudio = false;
+      let currentAudioPlayer = null;
 
-      // Audio Elements
-      const audioRing = new Audio('https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3');
-      audioRing.loop = true;
+      // Audio & Speech Recording
+      let mediaStream = null;
+      let speechRecognition = null;
+      let isListeningForSpeech = false;
+      let isProcessingTurn = false;
+      let isAgentSpeaking = false;
 
-      // Initialize on load
+      // ==========================================
+      // INITIALIZATION & CLINIC PROFILE
+      // ==========================================
       window.addEventListener('DOMContentLoaded', async () => {
-        initSpeechRecognition();
         await loadClinicProfile();
       });
 
@@ -613,276 +791,446 @@
           const res = await fetch('/api/clinic/profile');
           if (res.ok) {
             const data = await res.json();
-            if (data.profile && data.profile.clinicName && data.profile.clinicName.trim().length > 0) {
-              document.getElementById('clinicNameDisplay').textContent = data.profile.clinicName;
-              const greetEl = document.getElementById('initialGreetingBubble');
-              if (greetEl) {
-                greetEl.innerHTML = `Namaste! <strong>${escapeHtml(data.profile.clinicName)}</strong> mein aapka swagat hai. Niche green call button daba kar live baat shuru karein.`;
-              }
-            }
-            if (data.doctors && data.doctors.length > 0) {
-              const d0 = data.doctors[0];
-              document.getElementById('doctorSubtitleDisplay').textContent = `AI Receptionist • ${d0.name}${d0.specialty ? ' (' + d0.specialty + ')' : ''}`;
-            }
+            clinicProfile = data.profile || {};
+            const clinicName = clinicProfile.clinicName || 'Clinic';
+            document.getElementById('navClinicTitle').textContent = `${clinicName} — AI Reception`;
+            document.getElementById('emptyClinicName').textContent = `${clinicName} Voice Receptionist`;
           }
         } catch (e) {
           console.warn('Could not load clinic profile:', e);
         }
       }
 
-      function initSpeechRecognition() {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-          console.warn('Browser does not support Web Speech API');
-          return;
-        }
+      // ==========================================
+      // CALL CONTROL: START & END CALL
+      // ==========================================
+      async function startVoiceCall() {
+        if (isCallActive) return;
 
-        speechRecognizer = new SpeechRecognition();
-        speechRecognizer.lang = 'hi-IN';
-        speechRecognizer.continuous = true;
-        speechRecognizer.interimResults = false;
-
-        speechRecognizer.onresult = (event) => {
-          const lastIdx = event.results.length - 1;
-          const transcript = event.results[lastIdx][0].transcript.trim();
-          if (transcript) {
-            handleUserTurn(transcript);
-          }
-        };
-
-        speechRecognizer.onerror = (event) => {
-          console.warn('Speech recognition error:', event.error);
-        };
-
-        speechRecognizer.onend = () => {
-          if (isCallActive && isRecording) {
-            try { speechRecognizer.start(); } catch (e) {}
-          }
-        };
-      }
-
-      function toggleCall() {
-        if (!isCallActive) {
-          startCall();
-        } else {
-          endCall();
-        }
-      }
-
-      async function startCall() {
+        // Reset state
         isCallActive = true;
+        isMuted = false;
         callSeconds = 0;
-        callId = 'call_' + Date.now();
+        activeCallId = `call_${Date.now()}`;
         conversationHistory = [];
 
-        // UI Updates
-        document.getElementById('phoneContainer').classList.add('calling');
-        const pill = document.getElementById('callStatusPill');
-        pill.className = 'call-status-pill active';
-        document.getElementById('callStatusText').textContent = 'Connecting...';
+        // Hide Empty State View
+        const emptyState = document.getElementById('emptyStateView');
+        if (emptyState) emptyState.style.display = 'none';
 
-        const actionBtn = document.getElementById('btnCallAction');
-        actionBtn.className = 'control-btn btn-hangup';
-        actionBtn.innerHTML = '📴';
-        document.getElementById('callActionLabel').textContent = 'End Call';
+        // Switch bottom capsule to active call mode
+        document.getElementById('capsuleIdle').style.display = 'none';
+        document.getElementById('capsuleActive').style.display = 'flex';
+        document.getElementById('callCapsule').classList.add('active-call');
 
-        // Play phone connect ring briefly
-        try { audioRing.play(); } catch(e){}
+        // Start Call Timer
+        startTimer();
 
-        setTimeout(() => {
-          try { audioRing.pause(); audioRing.currentTime = 0; } catch(e){}
-          document.getElementById('callStatusText').textContent = 'Connected • 00:00';
-          startCallTimer();
+        // Add system message
+        appendSystemMessage('📞 Call connected. Starting session with Gnani AI Receptionist...');
 
-          // Start Microphone automatically for seamless live conversation
-          startMicrophone();
+        // Initialize Speech Recognition & Mic
+        initSpeechRecognition();
 
-          // AI Initial Greeting
-          const clinicName = document.getElementById('clinicNameDisplay').textContent;
-          const greeting = `Namaste! ${clinicName} mein aapka swagat hai. Main AI receptionist bol rahi hoon. Aaj main aapki kya sahayata kar sakti hoon?`;
-          appendBubble('agent', greeting);
-          speakText(greeting);
-        }, 1200);
+        // Deliver Initial Greeting
+        setCallStatus('🔊 Receptionist Bol Rahi Hai...', true);
+        const greetingText = 'Namaste! Clinic voice reception me aapka swagat hai. Main aapki kya madad kar sakti hoon?';
+        await speakTextWithGnani(greetingText);
+
+        // Transition to listening
+        setCallStatus('🎙️ Aap boliye... (Listening)', true);
+        startListening();
       }
 
-      function endCall() {
+      function endVoiceCall() {
+        if (!isCallActive) return;
         isCallActive = false;
-        clearInterval(callTimer);
-        stopMicrophone();
-        window.speechSynthesis.cancel();
-        try { audioRing.pause(); audioRing.currentTime = 0; } catch(e){}
 
-        document.getElementById('phoneContainer').classList.remove('calling');
-        const pill = document.getElementById('callStatusPill');
-        pill.className = 'call-status-pill';
-        document.getElementById('callStatusText').textContent = `Call Ended • ${formatTime(callSeconds)}`;
+        // Stop timer
+        clearInterval(callTimerInterval);
 
-        const actionBtn = document.getElementById('btnCallAction');
-        actionBtn.className = 'control-btn btn-dial';
-        actionBtn.innerHTML = '📞';
-        document.getElementById('callActionLabel').textContent = 'Call Clinic';
+        // Stop media and recognition
+        stopListening();
+        if (mediaStream) {
+          mediaStream.getTracks().forEach((t) => t.stop());
+          mediaStream = null;
+        }
 
-        appendBubble('system-alert', `📴 Call completed (${formatTime(callSeconds)}). Summary saved to clinic records.`);
+        // Stop any active audio playback
+        if (currentAudioPlayer) {
+          currentAudioPlayer.pause();
+          currentAudioPlayer = null;
+        }
+
+        // Reset UI capsule
+        document.getElementById('capsuleIdle').style.display = 'flex';
+        document.getElementById('capsuleActive').style.display = 'none';
+        document.getElementById('callCapsule').classList.remove('active-call');
+        document.getElementById('waveformBox').classList.remove('active');
+
+        // Format duration
+        const mins = String(Math.floor(callSeconds / 60)).padStart(2, '0');
+        const secs = String(callSeconds % 60).padStart(2, '0');
+        appendSystemMessage(`🔴 Call disconnected (Duration: ${mins}:${secs}). Session saved.`);
       }
 
-      function startCallTimer() {
-        callTimer = setInterval(() => {
+      function toggleMute() {
+        if (!isCallActive) return;
+        isMuted = !isMuted;
+        const btn = document.getElementById('btnMicToggle');
+        if (isMuted) {
+          btn.classList.add('muted');
+          btn.textContent = '🔇';
+          setCallStatus('Mic muted', false);
+          stopListening();
+        } else {
+          btn.classList.remove('muted');
+          btn.textContent = '🎙️';
+          setCallStatus('🎙️ Aap boliye... (Listening)', true);
+          startListening();
+        }
+      }
+
+      function startTimer() {
+        clearInterval(callTimerInterval);
+        document.getElementById('callTimer').textContent = '00:00';
+        callTimerInterval = setInterval(() => {
           callSeconds++;
-          document.getElementById('callStatusText').textContent = `Connected • ${formatTime(callSeconds)}`;
+          const mins = String(Math.floor(callSeconds / 60)).padStart(2, '0');
+          const secs = String(callSeconds % 60).padStart(2, '0');
+          document.getElementById('callTimer').textContent = `${mins}:${secs}`;
         }, 1000);
       }
 
-      function formatTime(sec) {
-        const m = Math.floor(sec / 60).toString().padStart(2, '0');
-        const s = (sec % 60).toString().padStart(2, '0');
-        return `${m}:${s}`;
-      }
-
-      function toggleMicrophone() {
-        if (!isRecording) {
-          startMicrophone();
+      function setCallStatus(text, isWaveActive) {
+        document.getElementById('callStatusText').textContent = text;
+        const wave = document.getElementById('waveformBox');
+        if (isWaveActive) {
+          wave.classList.add('active');
         } else {
-          stopMicrophone();
+          wave.classList.remove('active');
         }
       }
 
-      function startMicrophone() {
-        if (!speechRecognizer) return;
+      // ==========================================
+      // SPEECH RECOGNITION (BROWSER MIC -> GNANI)
+      // ==========================================
+      function initSpeechRecognition() {
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRec) {
+          console.warn('SpeechRecognition not supported in browser, using fallback.');
+          return;
+        }
+
+        speechRecognition = new SpeechRec();
+        speechRecognition.continuous = false;
+        speechRecognition.interimResults = false;
+        speechRecognition.lang = 'hi-IN';
+
+        speechRecognition.onresult = async (event) => {
+          if (!isCallActive || isMuted || isProcessingTurn || isAgentSpeaking) return;
+
+          const transcript = event.results[0][0].transcript;
+          if (transcript && transcript.trim().length > 0) {
+            console.log('Recognized speech:', transcript);
+            await handleTurn(transcript.trim());
+          }
+        };
+
+        speechRecognition.onerror = (err) => {
+          console.warn('Speech recognition event:', err.error);
+          if (isCallActive && !isAgentSpeaking && !isProcessingTurn && !isMuted) {
+            setTimeout(startListening, 600);
+          }
+        };
+
+        speechRecognition.onend = () => {
+          if (isCallActive && !isAgentSpeaking && !isProcessingTurn && !isMuted) {
+            setTimeout(startListening, 400);
+          }
+        };
+      }
+
+      function startListening() {
+        if (!isCallActive || isMuted || isAgentSpeaking || isProcessingTurn) return;
         try {
-          speechRecognizer.start();
-          isRecording = true;
-          document.getElementById('btnMic').classList.add('recording');
-          document.getElementById('micLabel').textContent = 'Listening...';
+          if (speechRecognition) {
+            speechRecognition.start();
+            setCallStatus('🎙️ Aap boliye... (Listening)', true);
+          }
         } catch (e) {
-          console.warn('Could not start mic:', e);
+          // already started
         }
       }
 
-      function stopMicrophone() {
-        if (!speechRecognizer) return;
+      function stopListening() {
         try {
-          speechRecognizer.stop();
-          isRecording = false;
-          document.getElementById('btnMic').classList.remove('recording');
-          document.getElementById('micLabel').textContent = 'Mic Off';
+          if (speechRecognition) {
+            speechRecognition.stop();
+          }
         } catch (e) {}
       }
 
-      function toggleSpeaker() {
-        isSpeakerOn = !isSpeakerOn;
-        document.getElementById('speakerLabel').textContent = isSpeakerOn ? 'Speaker On' : 'Muted';
-        if (!isSpeakerOn) window.speechSynthesis.cancel();
-      }
+      // ==========================================
+      // CONVERSATION TURN PROCESSING
+      // ==========================================
+      async function handleTurn(userText) {
+        if (isProcessingTurn || !userText) return;
+        isProcessingTurn = true;
+        stopListening();
 
-      async function handleUserTurn(text) {
-        if (!text || text.trim().length === 0) return;
-        appendBubble('user', text);
-        animateWaveform(true);
+        // 1. Render User Message in ChatGPT chat stream
+        appendUserMessage(userText);
+        setCallStatus('⏳ Processing with Gnani STT & Clinic Agent...', true);
+
+        // 2. Render typing indicator for Assistant
+        const typingId = showTypingIndicator();
 
         try {
           const res = await fetch('/api/call/turn', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              userText: text,
-              callId,
+              userText,
+              callId: activeCallId,
               history: conversationHistory,
             }),
           });
 
-          const data = await res.json();
-          animateWaveform(false);
+          removeTypingIndicator(typingId);
 
-          if (data.replyText) {
-            appendBubble('agent', data.replyText);
-            speakText(data.replyText);
+          if (res.ok) {
+            const data = await res.json();
+            const replyText = data.replyText || 'Ji, main samajh gayi.';
 
-            conversationHistory.push({ role: 'user', parts: text });
-            conversationHistory.push({ role: 'model', parts: data.replyText });
+            // Track conversation history
+            conversationHistory.push({ role: 'user', parts: userText });
+            conversationHistory.push({ role: 'model', parts: replyText });
 
-            if (data.actionTaken === 'booked') {
-              appendBubble('booked-success', '✅ Appointment Confirmed & Saved to Doctor Dashboard!');
-            } else if (data.actionTaken === 'emergency') {
-              appendBubble('system-alert', '🚨 Emergency Escalation Dispatched to Doctor Dashboard!');
+            // 3. Render Assistant Message with Gnani audio
+            appendAssistantMessage(replyText, data.audioBase64);
+
+            // 4. Play Gnani Timbre Speech Synthesis
+            if (data.audioBase64) {
+              setCallStatus('🔊 Receptionist Bol Rahi Hai...', true);
+              await playAudioBase64(data.audioBase64);
+            } else {
+              await speakTextWithGnani(replyText);
             }
+          } else {
+            appendAssistantMessage('Maaf kijiye, abhi server se connect nahi ho paya. Kripya punah boliye.');
           }
         } catch (err) {
-          console.error('Call turn error:', err);
-          animateWaveform(false);
-          const fallback = 'Kripya ek baar dobara kahiye, main sun nahi paayi.';
-          appendBubble('agent', fallback);
-          speakText(fallback);
+          console.error('Turn error:', err);
+          removeTypingIndicator(typingId);
+          appendAssistantMessage('Network error. Kripya dobara prayaas karein.');
+        } finally {
+          isProcessingTurn = false;
+          if (isCallActive && !isMuted) {
+            setCallStatus('🎙️ Aap boliye... (Listening)', true);
+            startListening();
+          }
         }
       }
 
-      function sendManualText() {
-        const input = document.getElementById('manualTextInput');
-        const text = input.value.trim();
-        if (!text) return;
-        input.value = '';
-        if (!isCallActive) startCall();
-        handleUserTurn(text);
-      }
-
-      function sendQuickPrompt(promptText) {
-        if (!isCallActive) startCall();
-        handleUserTurn(promptText);
-      }
-
-      function appendBubble(type, text) {
-        const box = document.getElementById('transcriptBox');
-        const bubble = document.createElement('div');
-        bubble.className = `bubble ${type}`;
-        bubble.innerHTML = escapeHtml(text);
-        box.appendChild(bubble);
-        box.scrollTop = box.scrollHeight;
-      }
-
-      function speakText(text) {
-        if (!isSpeakerOn) return;
-        if (!window.speechSynthesis) return;
-
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-
-        // Try to pick natural Hindi or Indian English voice
-        const voices = window.speechSynthesis.getVoices();
-        const indicVoice = voices.find(
-          (v) => v.lang.includes('hi') || v.lang.includes('IN') || v.name.includes('India')
-        );
-        if (indicVoice) utterance.voice = indicVoice;
-
-        utterance.onstart = () => {
-          document.getElementById('avatarCircle').classList.add('talking');
-          animateWaveform(true);
-        };
-        utterance.onend = () => {
-          document.getElementById('avatarCircle').classList.remove('talking');
-          animateWaveform(false);
-        };
-
-        window.speechSynthesis.speak(utterance);
-      }
-
-      function animateWaveform(active) {
-        const bars = document.querySelectorAll('.waveform-bar');
-        bars.forEach((bar) => {
-          if (active) {
-            bar.classList.add('active');
-          } else {
-            bar.classList.remove('active');
+      // ==========================================
+      // GNANI TIMBRE AUDIO PLAYBACK
+      // ==========================================
+      function playAudioBase64(audioBase64) {
+        return new Promise((resolve) => {
+          if (!audioBase64) return resolve();
+          try {
+            isAgentSpeaking = true;
+            if (currentAudioPlayer) {
+              currentAudioPlayer.pause();
+            }
+            const audio = new Audio(audioBase64);
+            currentAudioPlayer = audio;
+            audio.onended = () => {
+              isAgentSpeaking = false;
+              resolve();
+            };
+            audio.onerror = () => {
+              isAgentSpeaking = false;
+              resolve();
+            };
+            audio.play().catch(() => {
+              isAgentSpeaking = false;
+              resolve();
+            });
+          } catch (e) {
+            isAgentSpeaking = false;
+            resolve();
           }
         });
       }
 
+      async function speakTextWithGnani(text) {
+        try {
+          const res = await fetch('/api/voice/tts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, voice: 'Shivani', speed: 1.0 }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.audioBase64) {
+              await playAudioBase64(data.audioBase64);
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn('Gnani TTS error, falling back:', e);
+        }
+
+        // Web Speech synthesis fallback if network fails
+        return new Promise((resolve) => {
+          if (!window.speechSynthesis) return resolve();
+          isAgentSpeaking = true;
+          const u = new SpeechSynthesisUtterance(text);
+          u.lang = 'hi-IN';
+          u.onend = () => {
+            isAgentSpeaking = false;
+            resolve();
+          };
+          u.onerror = () => {
+            isAgentSpeaking = false;
+            resolve();
+          };
+          window.speechSynthesis.speak(u);
+        });
+      }
+
+      // ==========================================
+      // CHAT UI RENDERING (CHATGPT FORMAT)
+      // ==========================================
+      function appendUserMessage(text) {
+        const stream = document.getElementById('chatStream');
+        const row = document.createElement('div');
+        row.className = 'msg-row user';
+        row.innerHTML = `
+          <div class="msg-bubble-user">
+            <div class="msg-meta">You (Caller)</div>
+            <div>${escapeHtml(text)}</div>
+          </div>
+        `;
+        stream.appendChild(row);
+        scrollToBottom();
+      }
+
+      function appendAssistantMessage(text, audioBase64) {
+        const stream = document.getElementById('chatStream');
+        const row = document.createElement('div');
+        row.className = 'msg-row assistant';
+        const formatted = formatMarkdown(text);
+        const audioAttr = audioBase64 ? `data-audio="${audioBase64}"` : '';
+
+        row.innerHTML = `
+          <div class="assistant-avatar">🩺</div>
+          <div class="assistant-content-box">
+            <div class="assistant-header-bar">
+              <span class="assistant-sender">Appointly Receptionist</span>
+              <span class="gnani-badge" style="font-size: 0.65rem; padding: 2px 6px;">Gnani Voice</span>
+            </div>
+            <div class="msg-bubble-assistant">${formatted}</div>
+            ${
+              audioBase64
+                ? `<div class="msg-actions">
+                    <button class="btn-action-small" onclick="playAudioBase64('${audioBase64}')">
+                      🔊 Replay Voice
+                    </button>
+                  </div>`
+                : ''
+            }
+          </div>
+        `;
+        stream.appendChild(row);
+        scrollToBottom();
+      }
+
+      function appendSystemMessage(text) {
+        const stream = document.getElementById('chatStream');
+        const row = document.createElement('div');
+        row.className = 'msg-row system';
+        row.innerHTML = `<div class="msg-bubble-system">${escapeHtml(text)}</div>`;
+        stream.appendChild(row);
+        scrollToBottom();
+      }
+
+      function showTypingIndicator() {
+        const stream = document.getElementById('chatStream');
+        const id = `typing_${Date.now()}`;
+        const row = document.createElement('div');
+        row.className = 'msg-row assistant';
+        row.id = id;
+        row.innerHTML = `
+          <div class="assistant-avatar">🩺</div>
+          <div class="assistant-content-box">
+            <div class="typing-indicator">
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+              <span class="typing-dot"></span>
+            </div>
+          </div>
+        `;
+        stream.appendChild(row);
+        scrollToBottom();
+        return id;
+      }
+
+      function removeTypingIndicator(id) {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+      }
+
+      function scrollToBottom() {
+        const main = document.getElementById('chatMain');
+        main.scrollTop = main.scrollHeight;
+      }
+
       function escapeHtml(str) {
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
+        return (str || '').replace(/[&<>"']/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
+      }
+
+      function formatMarkdown(text) {
+        let escaped = escapeHtml(text);
+        // Bold
+        escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        // Newlines
+        escaped = escaped.replace(/\n/g, '<br/>');
+        return escaped;
+      }
+
+      // ==========================================
+      // PROMPT SHORTCUTS & MANUAL FALLBACK
+      // ==========================================
+      async function handlePromptClick(promptText) {
+        if (!isCallActive) {
+          await startVoiceCall();
+        }
+        await handleTurn(promptText);
+      }
+
+      function toggleManualInput() {
+        const row = document.getElementById('manualInputRow');
+        const isHidden = row.style.display === 'none' || !row.style.display;
+        row.style.display = isHidden ? 'flex' : 'none';
+        if (isHidden) {
+          document.getElementById('manualTextInput').focus();
+        }
+      }
+
+      async function submitManualText() {
+        const input = document.getElementById('manualTextInput');
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = '';
+
+        if (!isCallActive) {
+          await startVoiceCall();
+        }
+        await handleTurn(text);
       }
     </script>
   </body>
 </html>
-
