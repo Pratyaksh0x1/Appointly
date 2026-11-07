@@ -22,6 +22,7 @@
     "smoke:voice": "tsx scripts/smoke-voice-pipeline.ts",
     "chat:cli": "tsx scripts/cli-chat.ts",
     "eval": "tsx scripts/eval-harness.ts",
+    "preflight": "tsx scripts/preflight-check.ts",
     "audit": "npm audit --audit-level=high"
   },
   "keywords": [

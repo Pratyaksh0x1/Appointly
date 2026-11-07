@@ -1,9 +1,27 @@
 import { envSchema, EnvConfig } from '@appointly/shared';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 
-// Load .env from project root or current working directory
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+// Look for .env in current directory or parent monorepo directories
+function findEnvFile(): string | undefined {
+  let currDir = process.cwd();
+  for (let i = 0; i < 4; i++) {
+    const candidate = path.resolve(currDir, '.env');
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = path.dirname(currDir);
+    if (parent === currDir) break;
+    currDir = parent;
+  }
+  return undefined;
+}
+
+const envPath = findEnvFile();
+if (envPath) {
+  dotenv.config({ path: envPath });
+}
 dotenv.config();
 
 export function validateEnv(rawEnv: NodeJS.ProcessEnv = process.env): EnvConfig {

@@ -44,6 +44,26 @@ import { AppointlyEvents } from './observability/events.js';
 let isShuttingDown = false;
 const sseClients = new Set<http.ServerResponse>();
 
+export function findStaticFile(relativeSubpaths: string[]): string | null {
+  const baseDirs = [
+    process.cwd(),
+    path.resolve(process.cwd(), '..'),
+    path.resolve(process.cwd(), '../..'),
+    path.resolve(__dirname, '..'),
+    path.resolve(__dirname, '../..'),
+    path.resolve(__dirname, '../../..'),
+  ];
+  for (const sub of relativeSubpaths) {
+    for (const base of baseDirs) {
+      const candidate = path.resolve(base, sub);
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  return null;
+}
+
 export function broadcastDashboardEvent(eventType: string, data: unknown) {
   const payload = `event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const client of sseClients) {
@@ -609,11 +629,12 @@ export function createServer() {
 
       // 8d. Realtime Voice Pipeline Test Page
       if (req.method === 'GET' && (pathname === '/voice-test' || pathname === '/voice-test.html')) {
-        const candidatePaths = [
-          path.resolve(process.cwd(), 'apps/dashboard/public/voice-test.html'),
-          path.resolve(process.cwd(), 'public/voice-test.html'),
-        ];
-        const htmlPath = candidatePaths.find((p) => fs.existsSync(p));
+        const htmlPath = findStaticFile([
+          'apps/dashboard/public/voice-test.html',
+          'public/voice-test.html',
+          'dashboard/public/voice-test.html',
+          'voice-test.html',
+        ]);
         if (htmlPath) {
           const html = fs.readFileSync(htmlPath, 'utf8');
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -797,11 +818,12 @@ export function createServer() {
         req.method === 'GET' &&
         (pathname === '/' || pathname === '/index.html' || pathname === '/dashboard')
       ) {
-        const candidatePaths = [
-          path.resolve(process.cwd(), 'apps/dashboard/index.html'),
-          path.resolve(process.cwd(), 'public/index.html'),
-        ];
-        const htmlPath = candidatePaths.find((p) => fs.existsSync(p));
+        const htmlPath = findStaticFile([
+          'apps/dashboard/index.html',
+          'public/index.html',
+          'dashboard/index.html',
+          'index.html',
+        ]);
         if (htmlPath) {
           const html = fs.readFileSync(htmlPath, 'utf8');
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -812,11 +834,12 @@ export function createServer() {
 
       // 12. Static Logo
       if (req.method === 'GET' && pathname === '/logo.jpg') {
-        const candidatePaths = [
-          path.resolve(process.cwd(), 'apps/dashboard/public/logo.jpg'),
-          path.resolve(process.cwd(), 'public/logo.jpg'),
-        ];
-        const logoPath = candidatePaths.find((p) => fs.existsSync(p));
+        const logoPath = findStaticFile([
+          'apps/dashboard/public/logo.jpg',
+          'public/logo.jpg',
+          'dashboard/public/logo.jpg',
+          'logo.jpg',
+        ]);
         if (logoPath) {
           const img = fs.readFileSync(logoPath);
           res.writeHead(200, { 'Content-Type': 'image/jpeg' });
