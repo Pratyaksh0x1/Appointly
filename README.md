@@ -290,21 +290,37 @@ npm run typecheck
 # Code formatting and linting
 npm run lint
 
-# Run all 135 Vitest unit, state machine, latency, lifecycle & concurrency tests across 17 test suites
+# Run all 162 Vitest unit, state machine, latency, lifecycle & concurrency tests across 20 test suites
 npm test
+
+# Run conversational eval harness (61 Hinglish clinical scenarios)
+npm run eval
+
+# Run one-command preflight verification (DB connection, HTTP routes, eval harness)
+npm run preflight
 
 # Run database migration & seed on Neon
 npm run migrate
 npx tsx scripts/seed.ts
 ```
 
-### 4. Start the Development Server
+### 4. Docker Deployment (Optional)
+
+Run the full stack with zero local dependencies:
+
+```bash
+docker compose up --build
+```
+
+### 5. Start the Development Server
 
 ```bash
 npm run dev
 ```
 
 Open **[http://localhost:3000](http://localhost:3000)** in your browser to view the Minimalist Doctor Dashboard with real-time SSE updates and the live voice assistant simulator.
+
+See [`docs/demo-script.md`](docs/demo-script.md) for a step-by-step hackathon demonstration guide.
 
 ---
 
@@ -315,6 +331,9 @@ Open **[http://localhost:3000](http://localhost:3000)** in your browser to view 
 | `/healthz`                         | GET       | Liveness probe (returns HTTP 200 `{ status: "ok" }`)                                                                                  |
 | `/readyz`                          | GET       | Readiness probe (verifies database connectivity and returns status)                                                                   |
 | `/health`                          | GET       | Detailed health check (database status, doctors loaded, credit budget summary)                                                        |
+| `/metrics`                         | GET       | Prometheus exposition metrics (v0.0.4) for calls, latencies, bookings, and SLOs                                                       |
+| `/api/metrics`                     | GET       | Real-time JSON telemetry stream for dashboard charts and percentiles                                                                  |
+| `/api/alerts`                      | GET       | Real-time AlertEngine monitor for error rate and latency breaches                                                                     |
 | `/api/auth/google`                 | POST      | Doctor login via Google Identity Services token                                                                                       |
 | `/api/auth/dev-login`              | POST      | One-click doctor demo login for offline testing and hackathon judging                                                                 |
 | `/api/doctors`                     | GET       | Lists clinic doctors, specialties, fees, and consultation durations                                                                   |
