@@ -1,8 +1,35 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Environment variables
 .env
-__pycache__/
-*.py[cod]
+.env.local
+.env.production
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+
+# System & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Audio / Scratch outputs
 output/
 *.wav
 *.mp3
+
+# Python leftovers
+__pycache__/
+*.py[cod]
 .venv/
 venv/

@@ -1,0 +1,38 @@
+{
+  "name": "appointly",
+  "version": "1.0.0",
+  "description": "Hinglish voice agent for small clinics powered by Gnani AI, with real-time doctor dashboard and zero double-booking guarantee.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "start": "tsx src/index.ts",
+    "lint": "tsc --noEmit"
+  },
+  "keywords": [
+    "gnani-ai",
+    "voice-agent",
+    "hinglish",
+    "clinic-booking",
+    "doctor-dashboard",
+    "prisma",
+    "timbre",
+    "evon-30b"
+  ],
+  "author": "Appointly Team",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "pg": "^8.13.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
