@@ -1,0 +1,10 @@
+{
+  "name": "@appointly/dashboard",
+  "version": "1.0.0",
+  "description": "Minimalist Doctor Dashboard for Appointly Clinic Voice Assistant",
+  "private": true,
+  "scripts": {
+    "dev": "tsx -e \"console.log('Serving dashboard from apps/api on http://localhost:3000')\"",
+    "build": "echo \"Dashboard static assets ready in apps/dashboard/public\""
+  }
+}

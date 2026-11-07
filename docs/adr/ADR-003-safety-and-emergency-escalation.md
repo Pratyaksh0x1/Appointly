@@ -1,13 +1,16 @@
 # ADR-003: Safety & Hardcoded Code-Level Emergency Escalation
 
 ## Status
+
 Accepted
 
 ## Context
+
 Non-negotiable Rule 4 mandates: "No medical diagnosis or advice. Emergency keywords trigger a hardcoded escalation (code-level, not only prompt-level)."
 LLMs can hallucinate medical advice or fail to detect urgency when instructed solely via system prompts.
 
 ## Decision
+
 1. **Code-Level Emergency Interceptor**:
    - Every patient utterance passes through a deterministic regex-based emergency scanner (`checkEmergency`) before reaching the LLM.
    - Covers critical life-threatening conditions (chest pain, severe breathing issues, acute bleeding, stroke signs, seizures, loss of consciousness) across English, Hindi, and Hinglish.
@@ -20,6 +23,6 @@ LLMs can hallucinate medical advice or fail to detect urgency when instructed so
    - System prompts and tool specifications forbid diagnosing ailments or prescribing medications.
 
 ## Consequences
+
 - **Positive**: Zero risk of delayed emergency guidance or incorrect medical reassurance from LLM hallucinations.
 - **Negative**: Highly conservative keyword matching may trigger on benign contexts (e.g., "mere dost ko pichle saal heart attack hua tha"); however, in clinical safety, a false positive emergency warning is far safer than a false negative.
-

@@ -1,99 +1,134 @@
 # Appointly 🏥🎙️
+
 > **Hinglish Live Voice AI Agent for Small Clinics**  
-> *Built for the Gnani AI Hackathon*
+> _Built for the Gnani AI Hackathon • Backed by Neon Serverless PostgreSQL_
 
-![Appointly Logo](public/logo.jpg)
+![Appointly Logo](apps/dashboard/public/logo.jpg)
 
-Appointly is an empathetic, multilingual voice agent designed for small clinic reception desks in India. A patient speaks live in Hinglish (Hindi + English code-switching); Appointly confirms doctor availability, books the appointment via strict serializable database transactions, confirms the doctor, date, start time, and duration, and instantly displays the booking on a real-time doctor dashboard.
-
----
-
-## Non-Negotiable Core Architectural Principles
-
-1. **Transaction-First Booking (Rule 1 & 2)**:
-   - The LLM never writes directly to the database; it calls validated tools.
-   - Zero double-booking enforced via PostgreSQL unique constraint `UNIQUE(doctor_id, appointment_date, start_time)` and `idempotency_key`.
-   - The agent says "booked" **only after** the transaction successfully commits.
-2. **Safety & Hardcoded Emergency Triage (Rule 4)**:
-   - Code-level deterministic scanner (`checkEmergency`) executes before any LLM processing.
-   - Life-threatening symptoms (chest pain, cardiac arrest, breathing failure, stroke, unconsciousness) immediately trigger a hardcoded 108 emergency escalation in Hinglish.
-   - Appointly never offers medical diagnosis or medication advice.
-3. **5,000 Credit Budget & Cost Metering (Rule 7)**:
-   - Tracks credit burn rates across Gnani Prisma STT, Gnani Timbre TTS, and Evon 30B LLM.
-   - Enforces per-call (50 credits) and daily (2,000 credits) ceilings to prevent accidental exhaustion.
-   - High-fidelity mock mode (`USE_MOCK_SERVICES=true`) preserves 100% of credits during development and testing.
-4. **Structured JSON Logs with Zero Raw PII (Rule 6)**:
-   - Emits structured JSON logs with `call_id` and `request_id`.
-   - Auto-redacts secrets and masks patient phone numbers (`+91 ******3210`) and names.
-5. **Fail-Fast Startup & Secret Isolation (Rule 3)**:
-   - Zod environment validation at startup.
-   - Secrets are never exposed to the frontend dashboard.
+Appointly is an empathetic, multilingual voice assistant designed for small clinic reception desks in India. A patient speaks live in Hinglish (Hindi + English code-switching); Appointly confirms doctor availability, books the appointment via strict serializable database transactions on Neon PostgreSQL, confirms the doctor, date, start time, and duration, and instantly displays the booking on a real-time doctor dashboard via Server-Sent Events (SSE).
 
 ---
 
-## Architecture Decision Records (ADRs)
+## Architecture Overview
 
-- [ADR-001: Architecture, Stack & Monolithic Stateless Backend](docs/adr/ADR-001-architecture-and-stack.md)
-- [ADR-002: Zero Double-Booking via Transaction Isolation & Idempotency Keys](docs/adr/ADR-002-zero-double-booking.md)
-- [ADR-003: Safety & Hardcoded Code-Level Emergency Escalation](docs/adr/ADR-003-safety-and-emergency-escalation.md)
-- [ADR-004: Cost Metering, Rate Limiting & 5,000 Credit Budget Allocation](docs/adr/ADR-004-cost-metering-and-credit-allocation.md)
-- [ADR-005: External Service Resilience, Bounded Retries & Graceful Fallback Protocol](docs/adr/ADR-005-resilience-retries-and-fallback.md)
+For the detailed Mermaid architecture diagram and Master Context data flow, see [ARCHITECTURE.md](ARCHITECTURE.md).
+
+```
+Patient Voice ──> Gnani Prisma STT (v3.0) ──> Code-Level Emergency Scanner
+                                                      │
+              ┌───────────────────────────────────────┴───────────────────────────────────────┐
+              ▼ (Emergency)                                                                   ▼ (Routine Query)
+      Hardcoded 108 Escalation                                                        Evon 30B LLM (Reasoning)
+              │                                                                               │
+              ▼                                                                               ▼
+     Gnani Timbre TTS (Shivani)                                                       Validated Tool Calls
+              │                                                                               │
+              ▼                                                                               ▼
+       Patient Audio                                                             Neon PostgreSQL (Transaction)
+                                                                                              │
+                                                                                              ├─> Instant SSE Broadcast ─> Doctor Dashboard
+                                                                                              └─> Confirmed Speech Output ─> Patient Audio
+```
 
 ---
 
-## Project Structure
+## Monorepo Layout
 
 ```
 appointly/
-├── public/
-│   └── logo.jpg              # Appointly Logo
-├── docs/
-│   └── adr/                  # Architectural Decision Records
-│       ├── ADR-001-architecture-and-stack.md
-│       ├── ADR-002-zero-double-booking.md
-│       ├── ADR-003-safety-and-emergency-escalation.md
-│       └── ADR-004-cost-metering-and-credit-allocation.md
-├── src/
-│   ├── config/
-│   │   └── env.ts            # Fail-fast Zod startup environment validation
-│   ├── types/
-│   │   └── index.ts          # Core domain models (Doctor, Appointment, CallContext)
-│   ├── logger/
-│   │   └── logger.ts         # Structured JSON logger with automatic PII masking
-│   ├── safety/
-│   │   └── emergency.ts      # Hardcoded emergency keyword triage & 108 escalation
-│   ├── cost/
-│   │   └── cost-meter.ts     # 5,000 credit budget guardrail & spending limiter
-│   └── db/
-│       ├── schema.sql        # PostgreSQL schema with UNIQUE constraints
-│       ├── client.ts         # IDatabaseClient interface
-│       ├── memory-db.ts      # Transactional in-memory DB for tests & standalone dev
-│       ├── postgres-db.ts    # Real PostgreSQL client with SERIALIZABLE transactions
-│       └── index.ts          # DB factory
-├── tests/
-│   ├── env.test.ts           # Env validation & secret stripping tests
-│   ├── emergency.test.ts     # Hindi/English/Hinglish emergency detection tests
-│   ├── cost-meter.test.ts    # Per-call, daily limit & mock tests
-│   ├── db.test.ts            # Concurrency race condition & double-booking tests
-│   └── logger.test.ts        # PII & phone masking tests
-├── .env.example              # Documented configuration template
-├── tsconfig.json             # Strict TypeScript configuration
-└── package.json
+├── apps/
+│   ├── api/                  # Stateless Voice AI Backend (Node.js/TypeScript)
+│   └── dashboard/            # Minimalist Doctor Dashboard (Live SSE, OPD Roster, Simulator)
+├── packages/
+│   └── shared/               # Shared domain types, Zod validation schemas & clinic constants
+├── docs/adr/                 # Architecture Decision Records (ADR-001 to ADR-005)
+├── .github/workflows/ci.yml  # GitHub Actions CI (lint, typecheck, test, audit, gitleaks)
+├── Makefile                  # Developer workflow automation
+├── neon.ts                   # Neon project configuration & branch policy
+├── ARCHITECTURE.md           # Master Context architectural specification & data flow
+└── README.md
 ```
 
 ---
 
-## Quickstart
+## Quickstart & Setup Steps
 
-### 1. Configure Environment
+### 1. Fresh Clone & Installation
+
+```bash
+git clone https://github.com/Pratyaksh0x1/Appointly.git
+cd Appointly
+npm install
+```
+
+### 2. Configure Environment
+
+Copy `.env.example` to `.env`:
+
 ```bash
 cp .env.example .env
 ```
 
-### 2. Run Tests, Lint & Typecheck
-```bash
-npm run typecheck
-npm run lint
-npm test
+Fill in your configuration or use the provisioned Neon connection:
+
+```ini
+PORT=3000
+DATABASE_URL="postgresql://neondb_owner:...@ep-little-credit-bdwt1fpl-pooler.c-8.us-east-2.aws.neon.tech/neondb?sslmode=require"
+GNANI_API_KEY=your_gnani_api_key_here
+EVON_API_KEY=your_evon_api_key_here
+USE_MOCK_SERVICES=true
 ```
-All 23 test suites pass out of the box with zero external dependencies using the in-memory transactional mock engine.
+
+### 3. Run Build, Lint & Tests
+
+```bash
+# Typecheck all packages
+npm run typecheck
+
+# Code formatting and linting
+npm run lint
+
+# Run all 34 Vitest unit tests (including secret redaction & concurrency tests)
+npm test
+
+# Run end-to-end integration against Neon PostgreSQL
+npm run test-e2e
+```
+
+### 4. Start the Development Server
+
+```bash
+npm run dev
+```
+
+Open **[http://localhost:3000](http://localhost:3000)** in your browser to view the Minimalist Doctor Dashboard with real-time SSE updates and the live voice assistant simulator.
+
+---
+
+## Endpoints Reference
+
+| Endpoint                | Method | Purpose                                                                                                                       |
+| :---------------------- | :----- | :---------------------------------------------------------------------------------------------------------------------------- |
+| `/healthz`              | GET    | Liveness probe (returns HTTP 200 `{ status: "ok" }`)                                                                          |
+| `/readyz`               | GET    | Readiness probe (verifies database connectivity and returns status)                                                           |
+| `/health`               | GET    | Detailed health check (database status, doctors loaded, credit budget summary)                                                |
+| `/api/doctors`          | GET    | Lists clinic doctors, specialties, fees, and consultation durations                                                           |
+| `/api/slots`            | GET    | Retrieves open slots for a doctor on a specific date (`?doctorId=dr_sharma&date=YYYY-MM-DD`)                                  |
+| `/api/appointments`     | GET    | Retrieves all confirmed appointments for the doctor dashboard                                                                 |
+| `/api/callbacks`        | GET    | Retrieves saved receptionist callback tickets                                                                                 |
+| `/api/cost`             | GET    | Live cost meter metrics against the 5,000 credit budget                                                                       |
+| `/api/chat`             | POST   | Conversational endpoint (Emergency check $\rightarrow$ Evon LLM $\rightarrow$ Tool calling $\rightarrow$ Neon DB transaction) |
+| `/api/dashboard/stream` | GET    | Server-Sent Events (SSE) stream for real-time doctor dashboard updates                                                        |
+
+---
+
+## Non-Negotiable Rules Compliance
+
+1. **Rule 1 (LLM Never Writes to DB)**: LLM only emits validated tool arguments. Database operations execute via strict serializable transactions.
+2. **Rule 2 (Zero Double-Booking)**: Enforced via PostgreSQL `CONSTRAINT uq_doctor_appointment_slot UNIQUE (doctor_id, appointment_date, start_time)` and `idempotency_key`. The agent confirms booking only after commit.
+3. **Rule 3 (No Secrets in Code/Frontend)**: Fail-fast Zod startup validation; secrets stripped before serving configuration.
+4. **Rule 4 (Safety & Emergency Triage)**: Deterministic code-level regex filter intercepts medical emergencies (chest pain, breathing arrest, stroke) and immediately triggers 108 escalation in Hinglish.
+5. **Rule 5 (Resilience & Retries)**: 8,000ms timeouts, 3 retries with exponential backoff & jitter, and automatic receptionist callback ticket creation upon failure.
+6. **Rule 6 (Pino-Style JSON Logging & Redaction)**: Structured JSON with `call_id` and `request_id`. Automatically masks phone numbers (`+91 ******3210`), patient names, and redacts all secrets.
+7. **Rule 7 (5,000 Credit Budget Limiter)**: Enforces 50 credit/call and 2,000 credit/day limits. Mock mode enables testing with 0 credits burned.
+8. **Rule 8 (Clean Modules & ADRs)**: Documented in [docs/adr/](docs/adr/).

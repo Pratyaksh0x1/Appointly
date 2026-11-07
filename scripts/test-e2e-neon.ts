@@ -15,7 +15,12 @@ import { getDatabaseClient } from '../src/db/index.js';
 
 dotenv.config();
 
-async function makeRequest(port: number, path: string, method = 'GET', body?: unknown): Promise<any> {
+async function makeRequest(
+  port: number,
+  path: string,
+  method = 'GET',
+  body?: unknown
+): Promise<any> {
   return new Promise((resolve, reject) => {
     const data = body ? JSON.stringify(body) : undefined;
     const req = http.request(
@@ -126,7 +131,9 @@ async function runE2ETest() {
     if (duplicateAttempt.success || duplicateAttempt.error !== 'SLOT_ALREADY_BOOKED') {
       throw new Error('Double-booking prevention failed! Neon allowed overlapping booking.');
     }
-    console.log('   ✅ Double-Booking Strictly Prevented on Neon (Zero Double-Booking Verified).\n');
+    console.log(
+      '   ✅ Double-Booking Strictly Prevented on Neon (Zero Double-Booking Verified).\n'
+    );
 
     // Test 6: Verify Appointments on Neon
     console.log('8. Testing GET /api/appointments...');

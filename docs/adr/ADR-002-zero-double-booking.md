@@ -1,13 +1,16 @@
 # ADR-002: Zero Double-Booking via Transaction Isolation & Idempotency Keys
 
 ## Status
+
 Accepted
 
 ## Context
+
 In clinic appointment scheduling, race conditions and duplicate voice requests (e.g. user repeating "book karo", network packet duplicates) can lead to double-booking a doctor's limited time slot.
 Non-negotiable Rule 2 mandates: "No double booking: unique constraint + transaction + idempotency key."
 
 ## Decision
+
 1. **Relational Database Unique Constraint**:
    - `CONSTRAINT uq_doctor_appointment_slot UNIQUE (doctor_id, appointment_date, start_time)` on table `appointments`.
    - The database engine is the authoritative single source of truth.
@@ -21,6 +24,6 @@ Non-negotiable Rule 2 mandates: "No double booking: unique constraint + transact
    - The conversational agent NEVER promises an appointment is booked until the DB transaction has successfully committed.
 
 ## Consequences
+
 - **Positive**: Complete guarantee against double booking even under high concurrency or packet re-transmission.
 - **Negative**: Rejected concurrent bookings require the dialogue manager to offer the patient the next closest available slot.
-

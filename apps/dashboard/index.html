@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Appointly - Minimalist Doctor Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --card-bg: #ffffff;
+        --border: #e2e8f0;
+        --text-main: #0f172a;
+        --text-muted: #64748b;
+        --primary: #581c87;
+        --primary-light: #7e22ce;
+        --primary-subtle: #f3e8ff;
+        --accent: #10b981;
+        --danger: #ef4444;
+        --warning: #f59e0b;
+        --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family:
+          'Plus Jakarta Sans',
+          system-ui,
+          -apple-system,
+          sans-serif;
+        background-color: var(--bg);
+        color: var(--text-main);
+        line-height: 1.5;
+        padding-bottom: 40px;
+      }
+
+      /* Minimalist Navbar */
+      header {
+        background: #ffffff;
+        border-bottom: 1px solid var(--border);
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        padding: 12px 24px;
+      }
+
+      .nav-container {
+        max-width: 1280px;
+        margin: 0 auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-decoration: none;
+      }
+
+      .brand-logo {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        object-fit: cover;
+        box-shadow: var(--shadow-sm);
+      }
+
+      .brand-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--primary);
+        letter-spacing: -0.02em;
+      }
+
+      .brand-subtitle {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        font-weight: 500;
+      }
+
+      .status-badge {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--primary-subtle);
+        color: var(--primary);
+        padding: 6px 14px;
+        border-radius: 9999px;
+        font-size: 0.8125rem;
+        font-weight: 600;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+        animation: pulse 2s infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.6;
+          transform: scale(1.1);
+        }
+      }
+
+      /* Main Container */
+      main {
+        max-width: 1280px;
+        margin: 24px auto;
+        padding: 0 24px;
+      }
+
+      /* Metrics Grid */
+      .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+
+      .metric-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px 20px;
+        box-shadow: var(--shadow-sm);
+      }
+
+      .metric-title {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+
+      .metric-value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--text-main);
+        margin-top: 4px;
+      }
+
+      .metric-meta {
+        font-size: 0.75rem;
+        color: var(--accent);
+        font-weight: 500;
+        margin-top: 2px;
+      }
+
+      /* Layout Split */
+      .dashboard-layout {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr;
+        gap: 24px;
+      }
+
+      @media (max-width: 960px) {
+        .dashboard-layout {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .panel {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: var(--shadow-sm);
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+
+      .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 12px;
+      }
+
+      .panel-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: var(--text-main);
+      }
+
+      /* Appointments Table / Cards */
+      .appointments-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        max-height: 580px;
+        overflow-y: auto;
+      }
+
+      .appointment-item {
+        border: 1px solid var(--border);
+        border-left: 4px solid var(--primary-light);
+        border-radius: 8px;
+        padding: 14px 16px;
+        background: #fafaf9;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition:
+          transform 0.15s ease,
+          box-shadow 0.15s ease;
+      }
+
+      .appointment-item:hover {
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-sm);
+      }
+
+      .appointment-patient {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--text-main);
+      }
+
+      .appointment-details {
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+        margin-top: 2px;
+      }
+
+      .appointment-badge {
+        background: #ecfdf5;
+        color: #047857;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        border: 1px solid #a7f3d0;
+      }
+
+      /* Patient Live Simulator */
+      .chat-box {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #f8fafc;
+        padding: 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        height: 280px;
+        overflow-y: auto;
+        font-size: 0.875rem;
+      }
+
+      .chat-message {
+        padding: 10px 14px;
+        border-radius: 8px;
+        max-width: 85%;
+        line-height: 1.4;
+      }
+
+      .chat-user {
+        align-self: flex-end;
+        background: var(--primary);
+        color: white;
+      }
+
+      .chat-bot {
+        align-self: flex-start;
+        background: white;
+        border: 1px solid var(--border);
+        color: var(--text-main);
+      }
+
+      .chat-input-row {
+        display: flex;
+        gap: 8px;
+      }
+
+      .chat-input {
+        flex: 1;
+        padding: 10px 14px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 0.875rem;
+        outline: none;
+      }
+
+      .chat-input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 2px var(--primary-subtle);
+      }
+
+      .btn {
+        background: var(--primary);
+        color: white;
+        border: none;
+        padding: 10px 18px;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+
+      .btn:hover {
+        background: var(--primary-light);
+      }
+
+      .quick-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .chip {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        font-weight: 500;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+
+      .chip:hover {
+        background: var(--primary-subtle);
+        color: var(--primary);
+        border-color: var(--primary-light);
+      }
+
+      /* Doctor cards */
+      .doctor-card {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px;
+        background: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .doctor-name {
+        font-size: 0.875rem;
+        font-weight: 600;
+      }
+
+      .doctor-specialty {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+
+      .doctor-fee {
+        font-size: 0.8125rem;
+        font-weight: 600;
+        color: var(--primary);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="nav-container">
+        <a href="/" class="brand">
+          <img
+            src="/logo.jpg"
+            alt="Appointly Logo"
+            class="brand-logo"
+            onerror="this.style.display = 'none'"
+          />
+          <div>
+            <div class="brand-title">Appointly</div>
+            <div class="brand-subtitle">Arogya Care Clinic • Doctor Dashboard</div>
+          </div>
+        </a>
+        <div class="status-badge" id="sseStatus">
+          <div class="status-dot"></div>
+          <span>Neon Postgres Live</span>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- Key Metrics -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-title">Total Bookings</div>
+          <div class="metric-value" id="countAppointments">0</div>
+          <div class="metric-meta">Updated live from Neon</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Available Doctors</div>
+          <div class="metric-value" id="countDoctors">4</div>
+          <div class="metric-meta">Active OPD specialists</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Pending Callbacks</div>
+          <div class="metric-value" id="countCallbacks">0</div>
+          <div class="metric-meta">Zero missed callers</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-title">Credits Remaining</div>
+          <div class="metric-value" id="creditsRemaining">5,000</div>
+          <div class="metric-meta" id="creditsBudget">Budget: 5,000 max</div>
+        </div>
+      </div>
+
+      <!-- Main Content Layout -->
+      <div class="dashboard-layout">
+        <!-- Left: Realtime Appointments -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">Live Confirmed Appointments</div>
+            <button class="chip" onclick="fetchAppointments()">Refresh</button>
+          </div>
+          <div class="appointments-list" id="appointmentsList">
+            <div style="text-align: center; color: var(--text-muted); padding: 40px 0">
+              Connecting to database...
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Voice AI Simulator & Doctors Grid -->
+        <div style="display: flex; flex-direction: column; gap: 24px">
+          <!-- Live Patient Voice Simulator -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">🎙️ Live Voice Assistant Simulator</div>
+              <span style="font-size: 0.75rem; color: var(--text-muted)"
+                >Hinglish Code-Switching</span
+              >
+            </div>
+
+            <div class="chat-box" id="chatBox">
+              <div class="chat-message chat-bot">
+                Namaste! Main Appointly hoon. <br />
+                Aap kis doctor ke sath appointment schedule karna chahte hain?
+              </div>
+            </div>
+
+            <div class="quick-chips">
+              <span
+                class="chip"
+                onclick="sendQuickPrompt('Book Dr. Sharma for tomorrow at 09:30 AM')"
+                >📅 Book Dr. Sharma 09:30 AM</span
+              >
+              <span
+                class="chip"
+                onclick="sendQuickPrompt('Kaunse specialist doctors available hain?')"
+                >👨‍⚕️ Available Doctors?</span
+              >
+              <span
+                class="chip"
+                onclick="sendQuickPrompt('Emergency: Patient ko seene me tez dard hai!')"
+                >🚨 Emergency Triage</span
+              >
+            </div>
+
+            <div class="chat-input-row">
+              <input
+                type="text"
+                id="chatInput"
+                class="chat-input"
+                placeholder="Type or talk to the agent in Hinglish..."
+                onkeydown="if (event.key === 'Enter') sendMessage();"
+              />
+              <button class="btn" onclick="sendMessage()">Send</button>
+            </div>
+          </div>
+
+          <!-- Doctors Roster -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">Clinic Doctors & OPD Roster</div>
+            </div>
+            <div id="doctorsList" style="display: flex; flex-direction: column; gap: 8px">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      async function fetchStats() {
+        try {
+          const [aptRes, docRes, cbRes, costRes] = await Promise.all([
+            fetch('/api/appointments'),
+            fetch('/api/doctors'),
+            fetch('/api/callbacks'),
+            fetch('/api/cost'),
+          ]);
+
+          const appointments = await aptRes.json();
+          const doctors = await docRes.json();
+          const callbacks = await cbRes.json();
+          const cost = await costRes.json();
+
+          document.getElementById('countAppointments').textContent = appointments.length;
+          document.getElementById('countDoctors').textContent = doctors.length;
+          document.getElementById('countCallbacks').textContent = callbacks.length;
+          document.getElementById('creditsRemaining').textContent = cost.remainingCredits;
+
+          renderAppointments(appointments);
+          renderDoctors(doctors);
+        } catch (err) {
+          console.error('Error fetching dashboard stats:', err);
+        }
+      }
+
+      async function fetchAppointments() {
+        try {
+          const res = await fetch('/api/appointments');
+          const appointments = await res.json();
+          renderAppointments(appointments);
+          document.getElementById('countAppointments').textContent = appointments.length;
+        } catch (err) {
+          console.error('Error fetching appointments:', err);
+        }
+      }
+
+      function renderAppointments(list) {
+        const container = document.getElementById('appointmentsList');
+        if (!list || list.length === 0) {
+          container.innerHTML = `
+          <div style="text-align: center; color: var(--text-muted); padding: 40px 0;">
+            Abhi koi appointment book nahi hua hai.<br>
+            Use the simulator on the right to book your first live appointment!
+          </div>`;
+          return;
+        }
+
+        container.innerHTML = list
+          .map(
+            (apt) => `
+        <div class="appointment-item">
+          <div>
+            <div class="appointment-patient">${apt.patientName} (${apt.patientPhoneMasked})</div>
+            <div class="appointment-details">
+              <strong>${apt.doctorName || apt.doctorId}</strong> • ${apt.appointmentDate} at ${apt.startTime} (${apt.durationMinutes} mins)
+            </div>
+          </div>
+          <div class="appointment-badge">${apt.status}</div>
+        </div>
+      `
+          )
+          .join('');
+      }
+
+      function renderDoctors(doctors) {
+        const container = document.getElementById('doctorsList');
+        if (!doctors) return;
+        container.innerHTML = doctors
+          .map(
+            (doc) => `
+        <div class="doctor-card">
+          <div>
+            <div class="doctor-name">${doc.name}</div>
+            <div class="doctor-specialty">${doc.specialty} (${doc.durationMinutes}m slots)</div>
+          </div>
+          <div class="doctor-fee">₹${doc.fee}</div>
+        </div>
+      `
+          )
+          .join('');
+      }
+
+      // Connect to Server-Sent Events (SSE)
+      function setupLiveSSE() {
+        const eventSource = new EventSource('/api/dashboard/stream');
+
+        eventSource.addEventListener('connected', () => {
+          document.getElementById('sseStatus').innerHTML = `
+          <div class="status-dot"></div>
+          <span>Neon Postgres Live</span>
+        `;
+        });
+
+        eventSource.addEventListener('new_appointment', (e) => {
+          const apt = JSON.parse(e.data);
+          console.log('Instant appointment received via SSE:', apt);
+          fetchStats();
+        });
+
+        eventSource.addEventListener('emergency_alert', (e) => {
+          const alertData = JSON.parse(e.data);
+          alert(
+            `🚨 EMERGENCY CALL ALERT: Patient ${alertData.patientPhoneMasked} triggered 108 emergency triage.`
+          );
+        });
+
+        eventSource.onerror = () => {
+          document.getElementById('sseStatus').innerHTML = `
+          <div class="status-dot" style="background: var(--danger)"></div>
+          <span>Reconnecting...</span>
+        `;
+        };
+      }
+
+      async function sendMessage() {
+        const input = document.getElementById('chatInput');
+        const text = input.value.trim();
+        if (!text) return;
+
+        appendChatMessage(text, 'chat-user');
+        input.value = '';
+
+        try {
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text,
+              callId: `web_${Date.now()}`,
+              phone: '9876543210',
+            }),
+          });
+
+          const data = await res.json();
+          appendChatMessage(data.replyText, 'chat-bot');
+          fetchStats();
+        } catch (err) {
+          appendChatMessage('Error communicating with Appointly server.', 'chat-bot');
+        }
+      }
+
+      function sendQuickPrompt(prompt) {
+        document.getElementById('chatInput').value = prompt;
+        sendMessage();
+      }
+
+      function appendChatMessage(text, className) {
+        const box = document.getElementById('chatBox');
+        const msg = document.createElement('div');
+        msg.className = `chat-message ${className}`;
+        msg.innerHTML = text.replace(/<pauses>/g, '...');
+        box.appendChild(msg);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      // Init on load
+      window.onload = () => {
+        fetchStats();
+        setupLiveSSE();
+      };
+    </script>
+  </body>
+</html>

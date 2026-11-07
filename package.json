@@ -1,15 +1,24 @@
 {
   "name": "appointly",
   "version": "1.0.0",
-  "description": "Hinglish voice agent for small clinics powered by Gnani AI, with real-time doctor dashboard and zero double-booking guarantee.",
-  "main": "dist/index.js",
+  "description": "Hinglish live voice agent for small clinics with real-time doctor dashboard and zero double-booking on Neon PostgreSQL.",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "test:watch": "vitest",
-    "start": "tsx src/index.ts",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "format": "prettier --write \"**/*.{ts,json,md,html}\"",
+    "format:check": "prettier --check \"**/*.{ts,json,md,html}\"",
+    "dev": "npm run dev --workspace=@appointly/api",
+    "start": "npm run start --workspace=@appointly/api",
+    "migrate": "tsx scripts/migrate.ts",
+    "audit": "npm audit --audit-level=high"
   },
   "keywords": [
     "gnani-ai",
@@ -19,20 +28,15 @@
     "doctor-dashboard",
     "prisma",
     "timbre",
-    "evon-30b"
+    "evon-30b",
+    "neon-postgres"
   ],
   "author": "Appointly Team",
   "license": "MIT",
-  "dependencies": {
-    "@neon/config": "^1.13.0",
-    "@neon/env": "^2.1.0",
-    "dotenv": "^16.4.7",
-    "pg": "^8.13.1",
-    "zod": "^3.24.1"
-  },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/pg": "^8.11.10",
+    "prettier": "^3.4.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
