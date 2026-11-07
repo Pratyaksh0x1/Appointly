@@ -43,3 +43,4 @@ describe('Emergency Triage Guardrail', () => {
     expect(res3.isEmergency).toBe(false);
   });
 });
+

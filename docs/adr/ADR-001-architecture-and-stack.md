@@ -21,3 +21,4 @@ The system needs to:
 ## Consequences
 - **Positive**: Minimal infrastructure overhead, zero distributed state synchronization bugs, high developer velocity, fast unit test suite.
 - **Negative**: Audio streaming and WebSocket connections share the same process event loop; CPU-intensive audio transformations should be avoided or delegated.
+

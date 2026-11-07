@@ -97,3 +97,4 @@ export function getSafePublicConfig() {
     TOTAL_CREDIT_BUDGET: env.TOTAL_CREDIT_BUDGET,
   };
 }
+

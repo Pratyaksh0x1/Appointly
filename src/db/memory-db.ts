@@ -235,3 +235,4 @@ export class MemoryDatabaseClient implements IDatabaseClient {
     this.seed();
   }
 }
+

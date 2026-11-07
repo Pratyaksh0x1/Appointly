@@ -49,3 +49,4 @@ describe('Cost Meter & Credit Limiter', () => {
     expect(summary.remainingCredits).toBe(5000);
   });
 });
+

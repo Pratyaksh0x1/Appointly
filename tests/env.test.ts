@@ -37,3 +37,4 @@ describe('Environment Validation', () => {
     expect(safeConfig).toHaveProperty('TOTAL_CREDIT_BUDGET');
   });
 });
+

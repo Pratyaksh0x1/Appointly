@@ -64,3 +64,4 @@ VALUES
      ARRAY['Monday', 'Tuesday', 'Thursday', 'Friday'],
      ARRAY['10:00', '10:30', '11:00', '11:30', '17:30', '18:00', '18:30'])
 ON CONFLICT (id) DO NOTHING;
+

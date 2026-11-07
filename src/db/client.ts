@@ -26,3 +26,4 @@ export interface IDatabaseClient {
   getAppointments(doctorId?: string, date?: string): Promise<Appointment[]>;
   getCallbackRequests(): Promise<CallbackRequest[]>;
 }
+

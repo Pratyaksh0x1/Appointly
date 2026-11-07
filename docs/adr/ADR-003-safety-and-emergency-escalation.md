@@ -22,3 +22,4 @@ LLMs can hallucinate medical advice or fail to detect urgency when instructed so
 ## Consequences
 - **Positive**: Zero risk of delayed emergency guidance or incorrect medical reassurance from LLM hallucinations.
 - **Negative**: Highly conservative keyword matching may trigger on benign contexts (e.g., "mere dost ko pichle saal heart attack hua tha"); however, in clinical safety, a false positive emergency warning is far safer than a false negative.
+

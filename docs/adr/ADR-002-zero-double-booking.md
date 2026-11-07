@@ -23,3 +23,4 @@ Non-negotiable Rule 2 mandates: "No double booking: unique constraint + transact
 ## Consequences
 - **Positive**: Complete guarantee against double booking even under high concurrency or packet re-transmission.
 - **Negative**: Rejected concurrent bookings require the dialogue manager to offer the patient the next closest available slot.
+

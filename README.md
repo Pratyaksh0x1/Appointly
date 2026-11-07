@@ -37,6 +37,7 @@ Appointly is an empathetic, multilingual voice agent designed for small clinic r
 - [ADR-002: Zero Double-Booking via Transaction Isolation & Idempotency Keys](docs/adr/ADR-002-zero-double-booking.md)
 - [ADR-003: Safety & Hardcoded Code-Level Emergency Escalation](docs/adr/ADR-003-safety-and-emergency-escalation.md)
 - [ADR-004: Cost Metering, Rate Limiting & 5,000 Credit Budget Allocation](docs/adr/ADR-004-cost-metering-and-credit-allocation.md)
+- [ADR-005: External Service Resilience, Bounded Retries & Graceful Fallback Protocol](docs/adr/ADR-005-resilience-retries-and-fallback.md)
 
 ---
 

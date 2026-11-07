@@ -22,3 +22,4 @@ The hackathon allocation provides 5,000 API credits. Uncontrolled audio streamin
 ## Consequences
 - **Positive**: Guaranteed protection against accidental credit exhaustion during development and testing.
 - **Negative**: Long calls that exceed 50 credits will be gracefully terminated and routed to receptionist callback.
+
