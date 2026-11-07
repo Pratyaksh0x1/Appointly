@@ -836,6 +836,8 @@ export function createServer() {
           }
 
           // LLM Reasoning & Tool Calling
+          const clinicProfile = db.getClinicProfile ? await db.getClinicProfile() : { clinicName: 'Clinic' };
+          const clinicName = clinicProfile.clinicName || 'Clinic';
           const clinicDoctors = await db.getDoctors();
           const doctorScheduleDesc = clinicDoctors
             .map(
@@ -848,16 +850,16 @@ export function createServer() {
             {
               role: 'system',
               content:
-                'You are Appointly, an empathetic, highly professional clinic voice assistant for Arogya Care Clinic. ' +
+                `You are Appointly, an empathetic, highly professional clinic voice assistant for "${clinicName}". ` +
                 'You speak in natural Hinglish (Hindi + English code-switching). ' +
                 'Your mission is to help patients book doctor appointments, check timings, fees, and doctor availability.\n\n' +
                 'CURRENT CLINIC DOCTORS & OPD TIMINGS:\n' +
                 doctorScheduleDesc +
                 '\n\n' +
                 'CRITICAL DOCTOR TIMING RULES:\n' +
-                '1. Each doctor configures their specific consultation hours (e.g. Dr. Sharma may sit 17:00 to 22:00 / 5 PM to 10 PM).\n' +
+                '1. Each doctor configures their specific consultation hours.\n' +
                 "2. NEVER offer or book a slot outside the doctor's active working hours.\n" +
-                "3. If a patient asks for an unavailable time (e.g. asking for 10:00 AM when doctor works 17:00 to 22:00), politely explain the doctor's active timing in Hinglish and suggest available evening slots.\n" +
+                "3. If a patient asks for an unavailable time, politely explain the doctor's active timing in Hinglish and suggest available slots.\n" +
                 '4. RULE 1: You CANNOT write directly to the database. You MUST call tools (get_clinic_doctors, get_available_slots, book_appointment).\n' +
                 '5. RULE 2: When an appointment is booked, tell the patient clearly: doctor name, date, start time, and duration (in minutes). Only say "booked" after the DB tool confirms with success.\n' +
                 'Use natural conversational speech tags like <pauses> when appropriate.',

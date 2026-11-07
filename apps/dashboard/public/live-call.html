@@ -498,8 +498,8 @@
 
       <!-- Call Header -->
       <div class="call-header">
-        <div class="clinic-name" id="clinicNameDisplay">Arogya Medical Clinic</div>
-        <div class="doctor-subtitle" id="doctorSubtitleDisplay">AI Receptionist • Dr. Ramesh Sharma</div>
+        <div class="clinic-name" id="clinicNameDisplay">Clinic AI Receptionist</div>
+        <div class="doctor-subtitle" id="doctorSubtitleDisplay">AI Voice Assistant</div>
         <div class="call-status-pill" id="callStatusPill">
           <span>⚪</span>
           <span id="callStatusText">Ready to Dial</span>
@@ -526,23 +526,23 @@
 
       <!-- Live Captions & Conversation Stream -->
       <div class="transcript-container" id="transcriptBox">
-        <div class="bubble agent">
-          Namaste! <strong>Arogya Clinic</strong> mein aapka swagat hai. Main AI receptionist bol rahi hoon. Niche green call button daba kar baat shuru karein.
+        <div class="bubble agent" id="initialGreetingBubble">
+          Namaste! Clinic AI Receptionist mein aapka swagat hai. Niche green call button daba kar live baat shuru karein.
         </div>
       </div>
 
       <!-- Quick Dialogue Scenario Chips -->
       <div class="quick-chips-container">
-        <button class="chip-btn" onclick="sendQuickPrompt('Mujhe kal subah Dr. Sharma ke paas appointment book karna hai.')">
-          📅 Book Kal Subah
+        <button class="chip-btn" onclick="sendQuickPrompt('Mujhe kal appointment book karna hai.')">
+          📅 Book Kal Appointment
         </button>
-        <button class="chip-btn" onclick="sendQuickPrompt('Doctor ki OPD timing aur consultation fee kya hai?')">
+        <button class="chip-btn" onclick="sendQuickPrompt('Clinic ki OPD timing aur consultation fee kya hai?')">
           ⏰ Timing &amp; Fee
         </button>
-        <button class="chip-btn" onclick="sendQuickPrompt('Mera seene me bohot tez dard ho raha hai, saas lene me takleef hai.')">
+        <button class="chip-btn" onclick="sendQuickPrompt('Doctor jaldi aaiye, emergency hai, chest pain ho raha hai!')">
           🚨 Emergency
         </button>
-        <button class="chip-btn" onclick="sendQuickPrompt('Mera phone number 9876543210 hai, appointment cancel kar dijiye.')">
+        <button class="chip-btn" onclick="sendQuickPrompt('Mera registered phone number 9876543210 hai, appointment cancel kar dijiye.')">
           ❌ Cancel Slot
         </button>
       </div>
@@ -613,12 +613,16 @@
           const res = await fetch('/api/clinic/profile');
           if (res.ok) {
             const data = await res.json();
-            if (data.profile && data.profile.clinicName) {
+            if (data.profile && data.profile.clinicName && data.profile.clinicName.trim().length > 0) {
               document.getElementById('clinicNameDisplay').textContent = data.profile.clinicName;
+              const greetEl = document.getElementById('initialGreetingBubble');
+              if (greetEl) {
+                greetEl.innerHTML = `Namaste! <strong>${escapeHtml(data.profile.clinicName)}</strong> mein aapka swagat hai. Niche green call button daba kar live baat shuru karein.`;
+              }
             }
             if (data.doctors && data.doctors.length > 0) {
               const d0 = data.doctors[0];
-              document.getElementById('doctorSubtitleDisplay').textContent = `AI Receptionist • ${d0.name} (${d0.specialty})`;
+              document.getElementById('doctorSubtitleDisplay').textContent = `AI Receptionist • ${d0.name}${d0.specialty ? ' (' + d0.specialty + ')' : ''}`;
             }
           }
         } catch (e) {
@@ -881,3 +885,4 @@
     </script>
   </body>
 </html>
+

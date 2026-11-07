@@ -954,7 +954,7 @@
           />
           <div>
             <div class="brand-title">Appointly</div>
-            <div class="brand-subtitle">Arogya Care Clinic • Doctor OPD Dashboard</div>
+            <div class="brand-subtitle" id="brandSubtitle">Doctor OPD Dashboard</div>
           </div>
         </a>
 
@@ -975,13 +975,13 @@
 
           <!-- Doctor Profile / Auth Bar -->
           <div id="doctorProfileChip" class="doctor-chip">
-            <div class="doctor-chip-avatar" id="docAvatar">Dr</div>
+            <div class="doctor-chip-avatar" id="docAvatar">👨‍⚕️</div>
             <div style="display: flex; flex-direction: column">
               <strong id="docName" style="font-size: 0.78rem; line-height: 1.2"
-                >Dr. Priya Sharma</strong
+                >Doctor</strong
               >
               <span id="docSpecialty" style="font-size: 0.68rem; color: var(--text-muted)"
-                >Cardiologist</span
+                >Consulting Physician</span
               >
             </div>
             <button class="btn-logout" onclick="doctorLogout()" title="Sign Out">Sign Out</button>
@@ -1129,7 +1129,7 @@
               <div class="day-view-container">
                 <div style="font-size: 0.8rem; color: var(--text-muted)">
                   Visualizing consultation hours and booked slots for:
-                  <strong id="dayViewDocName">Dr. Priya Sharma</strong>
+                  <strong id="dayViewDocName">Doctor Schedule</strong>
                 </div>
 
                 <div class="day-timeline-grid" id="dayTimelineGrid">
@@ -1648,9 +1648,9 @@
               <div class="filter-chips">
                 <span
                   class="chip"
-                  onclick="sendQuickPrompt('Book Dr. Sharma for today at 17:30 for heart checkup')"
+                  onclick="sendQuickPrompt('Mujhe appointment book karna hai')"
                 >
-                  📅 Dr. Sharma 17:30
+                  📅 Book Appointment
                 </span>
                 <span
                   class="chip"
@@ -1982,16 +1982,16 @@
           <div class="form-grid-2">
             <div class="form-group">
               <label>Clinic Name</label>
-              <input type="text" id="obClinicName" class="chat-input" required value="Arogya Care Clinic" />
+              <input type="text" id="obClinicName" class="chat-input" placeholder="Enter your Clinic Name" required />
             </div>
             <div class="form-group">
               <label>Clinic Phone / Helpline</label>
-              <input type="text" id="obClinicPhone" class="chat-input" required value="+91 98765 43210" />
+              <input type="text" id="obClinicPhone" class="chat-input" placeholder="e.g. +91 98765 43210" required />
             </div>
           </div>
           <div class="form-group">
             <label>Clinic Address</label>
-            <input type="text" id="obClinicAddress" class="chat-input" required value="42, Green Glen Layout, Bellandur, Bengaluru" />
+            <input type="text" id="obClinicAddress" class="chat-input" placeholder="Enter Clinic Address" required />
           </div>
           <div class="form-grid-2">
             <div class="form-group">
@@ -2000,7 +2000,7 @@
             </div>
             <div class="form-group">
               <label>General Closing Time</label>
-              <input type="time" id="obClosingTime" class="chat-input" required value="22:00" />
+              <input type="time" id="obClosingTime" class="chat-input" required value="18:00" />
             </div>
           </div>
 
@@ -2011,10 +2011,10 @@
             <div style="display: flex; align-items: center; gap: 8px">
               <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600">Number of Doctors:</label>
               <select id="obDoctorCountSelect" class="chat-input" style="padding: 4px 8px; width: auto" onchange="renderOnboardingDoctorCards(this.value)">
-                <option value="1">1 Doctor</option>
+                <option value="1" selected>1 Doctor</option>
                 <option value="2">2 Doctors</option>
                 <option value="3">3 Doctors</option>
-                <option value="4" selected>4 Doctors</option>
+                <option value="4">4 Doctors</option>
                 <option value="5">5 Doctors</option>
               </select>
             </div>
@@ -2024,11 +2024,8 @@
             <!-- Doctor items rendered dynamically -->
           </div>
 
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border)">
-            <button type="button" class="btn-action" onclick="useDefaultOnboardingRoster()">
-              ⚡ Use Default Demo Roster
-            </button>
-            <button type="submit" class="btn">
+          <div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border)">
+            <button type="submit" class="btn" style="padding: 10px 24px; font-weight: 700; font-size: 0.92rem;">
               💾 Save &amp; Launch OPD Dashboard
             </button>
           </div>
@@ -2080,67 +2077,24 @@
 
         <div style="display: flex; flex-direction: column; gap: 8px">
           <button
-            class="btn-action"
+            class="btn"
             style="
-              padding: 10px;
+              padding: 12px 16px;
               text-align: left;
               display: flex;
               justify-content: space-between;
               align-items: center;
+              font-size: 0.9rem;
             "
-            onclick="doctorDevLogin('priya.sharma@appointly.in')"
+            onclick="doctorDevLogin('doctor')"
           >
             <div>
-              <strong>Dr. Priya Sharma</strong>
-              <div style="font-size: 0.72rem; color: var(--text-muted)">
-                Cardiologist • priya.sharma@appointly.in
+              <strong>👨‍⚕️ One-Click Doctor Login</strong>
+              <div style="font-size: 0.72rem; opacity: 0.85">
+                Instant Dashboard &amp; Onboarding Access
               </div>
             </div>
-            <span style="font-size: 0.75rem; color: var(--primary); font-weight: 700"
-              >Sign In &rarr;</span
-            >
-          </button>
-
-          <button
-            class="btn-action"
-            style="
-              padding: 10px;
-              text-align: left;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-            "
-            onclick="doctorDevLogin('rajesh.verma@appointly.in')"
-          >
-            <div>
-              <strong>Dr. Rajesh Verma</strong>
-              <div style="font-size: 0.72rem; color: var(--text-muted)">
-                Pediatrician • rajesh.verma@appointly.in
-              </div>
-            </div>
-            <span style="font-size: 0.75rem; color: var(--primary); font-weight: 700"
-              >Sign In &rarr;</span
-            >
-          </button>
-
-          <button
-            class="btn-action"
-            style="
-              padding: 10px;
-              text-align: left;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-            "
-            onclick="doctorDevLogin('anita.desai@appointly.in')"
-          >
-            <div>
-              <strong>Dr. Anita Desai</strong>
-              <div style="font-size: 0.72rem; color: var(--text-muted)">
-                Dermatologist • anita.desai@appointly.in
-              </div>
-            </div>
-            <span style="font-size: 0.75rem; color: var(--primary); font-weight: 700"
+            <span style="font-size: 0.8rem; font-weight: 700"
               >Sign In &rarr;</span
             >
           </button>
@@ -2158,49 +2112,6 @@
       let activeFilter = 'ALL';
       let activeTab = 'cards';
       let sseConnection = null;
-
-      const DEFAULT_DOCTORS_ROSTER = [
-        {
-          id: 'dr_sharma',
-          name: 'Dr. Ramesh Sharma',
-          specialty: 'General Medicine & Family Physician',
-          workingHoursStart: '09:00',
-          workingHoursEnd: '19:00',
-          durationMinutes: 30,
-          fee: 500,
-          activeDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-        },
-        {
-          id: 'dr_patel',
-          name: 'Dr. Priya Patel',
-          specialty: 'Pediatrics & Child Care',
-          workingHoursStart: '10:00',
-          workingHoursEnd: '18:00',
-          durationMinutes: 20,
-          fee: 600,
-          activeDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-        },
-        {
-          id: 'dr_kumar',
-          name: 'Dr. Rajesh Kumar',
-          specialty: 'Cardiology & Heart Care',
-          workingHoursStart: '17:00',
-          workingHoursEnd: '22:00',
-          durationMinutes: 30,
-          fee: 800,
-          activeDays: ['Tuesday', 'Thursday', 'Saturday'],
-        },
-        {
-          id: 'dr_iyer',
-          name: 'Dr. Ananya Iyer',
-          specialty: 'Dermatology & Skin Wellness',
-          workingHoursStart: '11:00',
-          workingHoursEnd: '20:00',
-          durationMinutes: 15,
-          fee: 500,
-          activeDays: ['Monday', 'Wednesday', 'Friday', 'Saturday'],
-        },
-      ];
 
       // Token handling
       function getAuthToken() {
@@ -2274,6 +2185,54 @@
         }
       }
 
+      async function handleGoogleCredentialResponse(response) {
+        try {
+          const res = await fetch('/api/auth/google', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ credential: response.credential }),
+          });
+          const data = await res.json();
+          if (data.token) {
+            setAuthToken(data.token);
+            currentDoctor = data.doctor;
+            closeAuthModal();
+            updateDoctorProfileUI();
+            await checkClinicOnboarding();
+            await fetchStats();
+          } else {
+            alert('Google login failed: ' + (data.message || 'Unauthorized'));
+          }
+        } catch (err) {
+          console.error('Google auth error:', err);
+          alert('Network error during Google authentication');
+        }
+      }
+
+      async function doctorDevLogin(identifier) {
+        try {
+          const res = await fetch('/api/auth/dev-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ doctorId: identifier }),
+          });
+          const data = await res.json();
+          if (data.token) {
+            setAuthToken(data.token);
+            currentDoctor = data.doctor;
+            closeAuthModal();
+            updateDoctorProfileUI();
+            await checkClinicOnboarding();
+            await fetchStats();
+          } else {
+            alert('Login failed: ' + (data.message || 'Unknown error'));
+          }
+        } catch (err) {
+          console.error('Dev login error:', err);
+          alert('Network error during login');
+        }
+      }
+
       // Check current doctor profile & onboarding status
       async function checkAuthSession() {
         const token = getAuthToken();
@@ -2295,6 +2254,22 @@
         } catch (err) {
           console.warn('Auth check error:', err);
           openAuthModal();
+        }
+      }
+
+      function updateDoctorProfileUI() {
+        if (!currentDoctor) return;
+        const avatar = document.getElementById('docAvatar');
+        const name = document.getElementById('docName');
+        const specialty = document.getElementById('docSpecialty');
+        if (avatar) avatar.textContent = currentDoctor.name ? currentDoctor.name.charAt(0) : '👨‍⚕️';
+        if (name) name.textContent = currentDoctor.name || 'Doctor';
+        if (specialty) specialty.textContent = currentDoctor.specialty || 'OPD Specialist';
+
+        // Also update brand subtitle with actual clinic name
+        if (cachedClinicProfile && cachedClinicProfile.clinicName) {
+          const brandSub = document.getElementById('brandSubtitle');
+          if (brandSub) brandSub.textContent = cachedClinicProfile.clinicName + ' • Doctor OPD Dashboard';
         }
       }
 
@@ -2329,7 +2304,7 @@
           if (profile.openingTime) document.getElementById('obOpeningTime').value = profile.openingTime;
           if (profile.closingTime) document.getElementById('obClosingTime').value = profile.closingTime;
         }
-        const count = (doctors && doctors.length > 0) ? doctors.length : 4;
+        const count = (doctors && doctors.length > 0) ? doctors.length : 1;
         document.getElementById('obDoctorCountSelect').value = String(count);
         renderOnboardingDoctorCards(count);
         document.getElementById('clinicOnboardingModal').style.display = 'flex';
@@ -2345,9 +2320,9 @@
         const n = parseInt(count, 10) || 1;
         let html = '';
         for (let i = 0; i < n; i++) {
-          const doc = (cachedDoctors && cachedDoctors[i]) || DEFAULT_DOCTORS_ROSTER[i] || {
-            name: `Dr. Doctor ${i + 1}`,
-            specialty: 'General Physician',
+          const doc = (cachedDoctors && cachedDoctors[i]) || {
+            name: '',
+            specialty: '',
             workingHoursStart: '09:00',
             workingHoursEnd: '17:00',
             durationMinutes: 30,
@@ -2361,11 +2336,11 @@
               <div class="form-grid-2">
                 <div class="form-group">
                   <label>Doctor Full Name</label>
-                  <input type="text" class="chat-input ob-doc-name" value="${escapeHtml(doc.name)}" required />
+                  <input type="text" class="chat-input ob-doc-name" placeholder="e.g. Dr. Your Name" value="${escapeHtml(doc.name || '')}" required />
                 </div>
                 <div class="form-group">
                   <label>Specialty</label>
-                  <input type="text" class="chat-input ob-doc-specialty" value="${escapeHtml(doc.specialty)}" required />
+                  <input type="text" class="chat-input ob-doc-specialty" placeholder="e.g. General Physician" value="${escapeHtml(doc.specialty || '')}" required />
                 </div>
               </div>
               <div class="form-grid-2">
@@ -2386,6 +2361,7 @@
                     <option value="20" ${doc.durationMinutes === 20 ? 'selected' : ''}>20 Minutes</option>
                     <option value="30" ${doc.durationMinutes === 30 || !doc.durationMinutes ? 'selected' : ''}>30 Minutes</option>
                     <option value="45" ${doc.durationMinutes === 45 ? 'selected' : ''}>45 Minutes</option>
+                    <option value="60" ${doc.durationMinutes === 60 ? 'selected' : ''}>60 Minutes</option>
                   </select>
                 </div>
                 <div class="form-group">
@@ -2449,6 +2425,7 @@
             localStorage.setItem('appointly_clinic_onboarded', 'true');
             closeClinicOnboardingModal();
             await fetchStats();
+            updateDoctorProfileUI();
           } else {
             const err = await res.json();
             alert('Could not save clinic setup: ' + (err.message || err.error));
@@ -2459,30 +2436,19 @@
         }
       }
 
-      function useDefaultOnboardingRoster() {
-        document.getElementById('obClinicName').value = 'Arogya Care Clinic';
-        document.getElementById('obClinicPhone').value = '+91 98765 43210';
-        document.getElementById('obClinicAddress').value = '42, Green Glen Layout, Bellandur, Bengaluru';
-        document.getElementById('obOpeningTime').value = '09:00';
-        document.getElementById('obClosingTime').value = '22:00';
-        document.getElementById('obDoctorCountSelect').value = '4';
-        cachedDoctors = [...DEFAULT_DOCTORS_ROSTER];
-        renderOnboardingDoctorCards(4);
-        submitClinicOnboarding();
-      }
-
       // Settings Configuration Tab Handlers
       function populateSettingsTab() {
         const profile = cachedClinicProfile || {};
-        document.getElementById('setClinicName').value = profile.clinicName || 'Arogya Care Clinic';
-        document.getElementById('setClinicPhone').value = profile.clinicPhone || '+91 98765 43210';
-        document.getElementById('setClinicAddress').value = profile.clinicAddress || '42, Green Glen Layout, Bellandur, Bengaluru';
+        document.getElementById('setClinicName').value = profile.clinicName || '';
+        document.getElementById('setClinicPhone').value = profile.clinicPhone || '';
+        document.getElementById('setClinicAddress').value = profile.clinicAddress || '';
         document.getElementById('setOpeningTime').value = profile.openingTime || '09:00';
-        document.getElementById('setClosingTime').value = profile.closingTime || '22:00';
+        document.getElementById('setClosingTime').value = profile.closingTime || '18:00';
 
-        const docs = (cachedDoctors && cachedDoctors.length > 0) ? cachedDoctors : DEFAULT_DOCTORS_ROSTER;
-        document.getElementById('setDoctorCountSelect').value = String(Math.min(5, Math.max(1, docs.length)));
-        renderSettingsDoctorCards(docs.length);
+        const docs = (cachedDoctors && cachedDoctors.length > 0) ? cachedDoctors : [];
+        const count = Math.min(5, Math.max(1, docs.length || 1));
+        document.getElementById('setDoctorCountSelect').value = String(count);
+        renderSettingsDoctorCards(count);
       }
 
       function renderSettingsDoctorCards(count) {
@@ -2491,9 +2457,9 @@
         const n = parseInt(count, 10) || 1;
         let html = '';
         for (let i = 0; i < n; i++) {
-          const doc = (cachedDoctors && cachedDoctors[i]) || DEFAULT_DOCTORS_ROSTER[i] || {
-            name: `Dr. Doctor ${i + 1}`,
-            specialty: 'Consulting Physician',
+          const doc = (cachedDoctors && cachedDoctors[i]) || {
+            name: '',
+            specialty: '',
             workingHoursStart: '09:00',
             workingHoursEnd: '17:00',
             durationMinutes: 30,
@@ -3094,6 +3060,9 @@
         const selectedDate = picker.value;
         const doctor = currentDoctor || cachedDoctors[0];
         if (!doctor || !grid) return;
+
+        const dayViewNameEl = document.getElementById('dayViewDocName');
+        if (dayViewNameEl) dayViewNameEl.textContent = doctor.name || 'Doctor';
 
         // Working hours
         const duration = doctor.durationMinutes || 30;

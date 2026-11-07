@@ -251,14 +251,17 @@ export async function processLiveVoiceTurn(options: {
   const { userText, callId, history = [], clinicProfile, doctors = [] } = options;
   const db = getDatabaseClient();
   const profile: ClinicProfile = clinicProfile || (db.getClinicProfile ? await db.getClinicProfile() : {
-    clinicName: 'Arogya Medical Clinic',
-    clinicPhone: '+91 11 4050 9000',
-    clinicAddress: 'Sector 14, Health Plaza, Gurgaon',
+    clinicName: '',
+    clinicPhone: '',
+    clinicAddress: '',
     openingTime: '09:00',
-    closingTime: '21:00',
-    onboardingCompleted: true,
+    closingTime: '18:00',
+    onboardingCompleted: false,
   });
   const docList = doctors.length > 0 ? doctors : await db.getDoctors();
+  const clinicTitle = profile.clinicName || 'Clinic';
+  const clinicAddressStr = profile.clinicAddress ? `Clinic Address: ${profile.clinicAddress}.` : '';
+  const clinicPhoneStr = profile.clinicPhone ? `Helpline: ${profile.clinicPhone}.` : '';
 
   // Fast emergency check before any AI call
   const emergencyKeywords = ['chest pain', 'chhati me dard', 'heart attack', 'saas nahi', 'stroke', 'unconscious', 'behoshi', 'khoon nikal'];
@@ -285,8 +288,8 @@ export async function processLiveVoiceTurn(options: {
         .map((d) => `- ${d.name} (${d.specialty}), ID: ${d.id}, Fee: ₹${d.fee}, Hours: ${d.workingHoursStart}-${d.workingHoursEnd}, Days: ${d.activeDays.join(', ')}`)
         .join('\n');
 
-      const systemInstruction = `You are the friendly, professional AI Voice Receptionist for "${profile.clinicName}".
-Clinic Address: ${profile.clinicAddress}. Helpline: ${profile.clinicPhone}.
+      const systemInstruction = `You are the friendly, professional AI Voice Receptionist for "${clinicTitle}".
+${clinicAddressStr} ${clinicPhoneStr}
 Operating Hours: ${profile.openingTime} to ${profile.closingTime}.
 Today's date is ${todayStr}. Tomorrow is ${tomorrowStr}.
 
@@ -398,17 +401,21 @@ async function processClinicalFallback(
 ): Promise<LiveTurnResult> {
   const db = getDatabaseClient();
   const lower = text.toLowerCase();
-  const primaryDoc = doctors[0] || {
-    id: 'dr_sharma',
-    name: 'Dr. Ramesh Sharma',
-    specialty: 'Cardiologist',
-    workingHoursStart: '09:00',
-    workingHoursEnd: '18:00',
+  const dbDocs = await db.getDoctors();
+  const primaryDoc = doctors[0] || dbDocs[0] || {
+    id: 'doc_1',
+    name: 'Doctor',
+    specialty: 'General Physician',
+    workingHoursStart: profile.openingTime || '09:00',
+    workingHoursEnd: profile.closingTime || '18:00',
     durationMinutes: 30,
     fee: 500,
     activeDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-    availableSlots: ['09:00', '09:30', '10:00', '10:30', '11:00', '17:00', '17:30'],
+    availableSlots: ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00'],
   };
+
+  const clinicTitle = profile.clinicName || 'Clinic';
+  const clinicLocStr = profile.clinicAddress ? ` Clinic ka pata hai ${profile.clinicAddress}.` : '';
 
   const today = new Date().toISOString().split('T')[0];
   const tomorrowDate = new Date();
@@ -466,7 +473,7 @@ async function processClinicalFallback(
   if (lower.includes('timing') || lower.includes('samay') || lower.includes('kab') || lower.includes('doctor')) {
     const docNames = doctors.map((d) => `${d.name} (${d.specialty})`).join(', ');
     return {
-      replyText: `${profile.clinicName} subah ${profile.openingTime} se shaam ${profile.closingTime} tak open hai. Hamare yahan ${docNames} uplabdh hain. Aapko kab appointment chahiye?`,
+      replyText: `${clinicTitle} subah ${profile.openingTime || '09:00'} se shaam ${profile.closingTime || '18:00'} tak open hai.${docNames ? ' Hamare yahan ' + docNames + ' uplabdh hain.' : ''} Aapko kab appointment chahiye?`,
       actionTaken: 'none',
       modelUsed: 'indic-clinical-engine',
     };
@@ -511,7 +518,7 @@ async function processClinicalFallback(
   if (booking.success && booking.appointment) {
     await emitOutboxEvent('new_appointment', booking.appointment as any);
     return {
-      replyText: `Aapki appointment ${primaryDoc.name} ke sath ${targetDate} ko ${requestedTime} baje book ho gayi hai. Clinic ka pata hai ${profile.clinicAddress}. Kripya 10 minute pehle pahunchein.`,
+      replyText: `Aapki appointment ${primaryDoc.name} ke sath ${targetDate} ko ${requestedTime} baje book ho gayi hai.${clinicLocStr} Kripya 10 minute pehle pahunchein.`,
       actionTaken: 'booked',
       bookingData: booking.appointment,
       modelUsed: 'indic-clinical-engine',
@@ -519,7 +526,7 @@ async function processClinicalFallback(
   }
 
   return {
-    replyText: `Namaste! ${profile.clinicName} mein aapka swagat hai. Main AI receptionist bol rahi hoon. Aapko kis doctor ke paas appointment chahiye?`,
+    replyText: `Namaste! ${clinicTitle} mein aapka swagat hai. Main AI receptionist bol rahi hoon. Aapko kis doctor ke paas appointment chahiye?`,
     actionTaken: 'none',
     modelUsed: 'indic-clinical-engine',
   };

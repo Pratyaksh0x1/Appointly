@@ -23,11 +23,11 @@ import path from 'path';
 export class PostgresDatabaseClient implements IDatabaseClient {
   private pool: pg.Pool;
   private clinicProfile: ClinicProfile = {
-    clinicName: 'Arogya Care Clinic',
-    clinicPhone: '+91 98765 43210',
-    clinicAddress: '42, Green Glen Layout, Bellandur, Bengaluru',
+    clinicName: '',
+    clinicPhone: '',
+    clinicAddress: '',
     openingTime: '09:00',
-    closingTime: '22:00',
+    closingTime: '18:00',
     onboardingCompleted: false,
   };
 
