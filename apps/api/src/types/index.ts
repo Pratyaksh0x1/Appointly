@@ -6,6 +6,53 @@ export type AppointmentStatus = 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'RESCH
 export type CallbackStatus = 'PENDING' | 'RESOLVED';
 export type AiServiceType = 'PRISMA_STT' | 'TIMBRE_TTS' | 'EVON_LLM';
 
+export type CallOutcome =
+  | 'BOOKED'
+  | 'RESCHEDULED'
+  | 'CANCELLED'
+  | 'CALLBACK_SAVED'
+  | 'EMERGENCY_ESCALATED'
+  | 'CALL_DROPPED'
+  | 'PATIENT_SILENT_DISCONNECT'
+  | 'INQUIRY_ONLY';
+
+export interface DoctorCallSummary {
+  id: string;
+  callId: string;
+  patientName: string;
+  patientPhoneMasked: string;
+  concern: string; // Patient's own words, strictly non-diagnostic
+  preferredTime: string;
+  outcome: CallOutcome;
+  aiSummary: string;
+  doctorId?: string;
+  doctorName?: string;
+  appointmentId?: string;
+  createdAt: Date;
+}
+
+export interface ReminderRecord {
+  id: string;
+  appointmentId: string;
+  patientName: string;
+  patientPhoneMasked: string;
+  doctorName: string;
+  appointmentDate: string;
+  startTime: string;
+  reminderType: '24h' | '2h';
+  channel: 'SMS_AND_VOICE';
+  scheduledFor: Date;
+  status: 'PENDING' | 'PROCESSED' | 'FAILED';
+  scriptGenerated?: string;
+  sentAt?: Date;
+}
+
+export interface CallerVerificationResult {
+  verified: boolean;
+  appointment?: Appointment;
+  errorMessage?: string;
+}
+
 export interface Doctor {
   id: string;
   name: string;
@@ -33,6 +80,8 @@ export interface Appointment {
   visitType?: string;
   reason?: string;
   aiSummary?: string;
+  displayDateKolkata?: string;
+  displayTimeKolkata?: string;
   createdAt: Date;
 }
 

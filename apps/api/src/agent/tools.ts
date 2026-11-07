@@ -74,6 +74,10 @@ export const saveCallbackRequestArgsSchema = z.object({
   preferredTime: z.string().optional(),
 });
 
+export const releaseHoldArgsSchema = z.object({
+  holdId: z.string().min(1, 'holdId is required'),
+});
+
 // ==========================================
 // 2. EVON / OPENAI TOOL DEFINITIONS
 // ==========================================
@@ -307,6 +311,23 @@ export async function executeAgentTool(
             slotStart: startTime,
             expiresAt: holdRes.expiresAt ? formatKolkata(holdRes.expiresAt).displayTime : undefined,
           },
+        };
+      }
+
+      case 'release_hold': {
+        const parseRes = releaseHoldArgsSchema.safeParse(rawArgs);
+        if (!parseRes.success) {
+          return {
+            success: false,
+            error: `INVALID_ARGUMENTS: ${parseRes.error.issues.map((i) => i.message).join(', ')}`,
+          };
+        }
+        const { holdId } = parseRes.data;
+        const released = await bookingService.releaseHold(holdId);
+        return {
+          success: released,
+          data: { released, holdId },
+          userMessage: 'Slot hold release kar diya gaya hai.',
         };
       }
 

@@ -986,6 +986,15 @@
                 >0</span
               >
             </button>
+            <button class="tab-btn" id="tabBtnSummaries" onclick="switchTab('summaries')">
+              🩺 AI Call Summaries
+              <span
+                class="tab-badge"
+                id="tabBadgeSummaries"
+                style="background: #e0f2fe; color: #0369a1"
+                >0</span
+              >
+            </button>
           </div>
 
           <!-- TAB 1: Rich Appointment Cards View -->
@@ -1058,6 +1067,32 @@
               </div>
               <div id="callbacksContainer">
                 <!-- Rendered dynamically -->
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB 4: Doctor Call Summaries (Phase 7 Lifecycle) -->
+          <div id="tabContentSummaries" style="display: none">
+            <div class="panel">
+              <div class="panel-header">
+                <div class="panel-title"><span>🩺</span> AI Call Summaries & Patient Concerns</div>
+                <button
+                  class="chip"
+                  onclick="fetchCallSummaries()"
+                  title="Refresh call summaries from Neon"
+                >
+                  🔄 Refresh
+                </button>
+              </div>
+              <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 16px">
+                Generated automatically by the AI agent after each call. Displays the patient's
+                concern in their own words, preferred time, and booking outcome (Rule 4: strictly
+                non-diagnostic).
+              </div>
+              <div class="appointments-list" id="callSummariesContainer">
+                <div style="text-align: center; color: var(--text-muted); padding: 40px 0">
+                  Loading call summaries...
+                </div>
               </div>
             </div>
           </div>
@@ -1508,6 +1543,7 @@
       let cachedAppointments = [];
       let cachedDoctors = [];
       let cachedCallbacks = [];
+      let cachedCallSummaries = [];
       let activeFilter = 'ALL';
       let activeTab = 'cards';
       let sseConnection = null;
@@ -1692,6 +1728,7 @@
           renderCallbacks();
           populateDoctorSelect(doctors);
           renderDayViewTimeline();
+          fetchCallSummaries();
         } catch (err) {
           console.error('Error fetching dashboard stats:', err);
         }
@@ -1700,21 +1737,115 @@
       // Tab Switching
       function switchTab(tabId) {
         activeTab = tabId;
-        ['Cards', 'DayView', 'Callbacks'].forEach((t) => {
+        ['Cards', 'DayView', 'Callbacks', 'Summaries'].forEach((t) => {
           const btn = document.getElementById(`tabBtn${t}`);
           const content = document.getElementById(`tabContent${t}`);
-          if (t.toLowerCase() === tabId.toLowerCase()) {
-            btn.classList.add('active');
-            content.style.display = 'block';
-          } else {
-            btn.classList.remove('active');
-            content.style.display = 'none';
+          if (btn && content) {
+            if (t.toLowerCase() === tabId.toLowerCase()) {
+              btn.classList.add('active');
+              content.style.display = 'block';
+            } else {
+              btn.classList.remove('active');
+              content.style.display = 'none';
+            }
           }
         });
 
         if (tabId === 'dayview') {
           renderDayViewTimeline();
+        } else if (tabId === 'summaries') {
+          renderCallSummaries();
         }
+      }
+
+      async function fetchCallSummaries() {
+        try {
+          const res = await fetch('/api/calls', { headers: authHeaders() });
+          if (res.ok) {
+            const summaries = await res.json();
+            cachedCallSummaries = summaries;
+            const badge = document.getElementById('tabBadgeSummaries');
+            if (badge) badge.textContent = summaries.length;
+            renderCallSummaries();
+          }
+        } catch (err) {
+          console.warn('Error fetching call summaries:', err);
+        }
+      }
+
+      function renderCallSummaries() {
+        const container = document.getElementById('callSummariesContainer');
+        if (!container) return;
+
+        if (cachedCallSummaries.length === 0) {
+          container.innerHTML = `
+            <div style="text-align: center; color: var(--text-muted); padding: 40px 0;">
+              No call summaries recorded yet.<br>
+              Completed voice calls will automatically generate doctor summaries here.
+            </div>
+          `;
+          return;
+        }
+
+        container.innerHTML = cachedCallSummaries
+          .map((s) => {
+            const outcomeColor =
+              s.outcome === 'BOOKED'
+                ? '#10b981'
+                : s.outcome === 'RESCHEDULED'
+                  ? '#3b82f6'
+                  : s.outcome === 'EMERGENCY_ESCALATED'
+                    ? '#ef4444'
+                    : s.outcome === 'CANCELLED'
+                      ? '#6b7280'
+                      : s.outcome === 'CALLBACK_SAVED'
+                        ? '#f59e0b'
+                        : '#8b5cf6';
+
+            const timeFormatted = new Date(s.createdAt).toLocaleString('en-IN', {
+              dateStyle: 'medium',
+              timeStyle: 'short',
+              timeZone: 'Asia/Kolkata',
+            });
+
+            return `
+            <div class="appointment-card" style="border-left: 4px solid ${outcomeColor};">
+              <div class="apt-card-top">
+                <div class="apt-patient-info">
+                  <div class="apt-patient-name">${escapeHtml(s.patientName)}</div>
+                  <div class="apt-patient-phone">📞 ${escapeHtml(s.patientPhoneMasked)} • ID: <code>${escapeHtml(s.callId)}</code></div>
+                </div>
+                <div class="status-pill" style="background: ${outcomeColor}20; color: ${outcomeColor}; border: 1px solid ${outcomeColor}50;">
+                  ${escapeHtml(s.outcome)}
+                </div>
+              </div>
+
+              <div class="apt-card-meta-grid" style="margin-top: 10px;">
+                <div class="apt-meta-item">
+                  <span class="apt-meta-label">Patient Verbatim Concern (Non-Diagnostic)</span>
+                  <span class="apt-meta-value" style="font-style: italic; color: #7e22ce;">${escapeHtml(s.concern)}</span>
+                </div>
+                <div class="apt-meta-item">
+                  <span class="apt-meta-label">Preferred Time</span>
+                  <span class="apt-meta-value">🕒 ${escapeHtml(s.preferredTime)}</span>
+                </div>
+                <div class="apt-meta-item">
+                  <span class="apt-meta-label">Doctor</span>
+                  <span class="apt-meta-value">👨‍⚕️ ${escapeHtml(s.doctorName || 'General OPD')}</span>
+                </div>
+                <div class="apt-meta-item">
+                  <span class="apt-meta-label">Recorded At</span>
+                  <span class="apt-meta-value">📅 ${timeFormatted}</span>
+                </div>
+              </div>
+
+              <div class="apt-ai-summary-box" style="margin-top: 12px; background: #faf5ff; border: 1px solid #e9d5ff;">
+                <strong style="color: #6b21a8;">🤖 AI Operational Summary:</strong> ${escapeHtml(s.aiSummary)}
+              </div>
+            </div>
+          `;
+          })
+          .join('');
       }
 
       // Filter handling
@@ -2127,6 +2258,12 @@
           const update = JSON.parse(e.data);
           console.log('⚡ Doctor schedule updated via SSE:', update);
           fetchStats();
+        });
+
+        // 7. Post-Call Doctor Summary Created Event
+        sseConnection.addEventListener('call_summary_created', (e) => {
+          console.log('⚡ Call summary created via SSE');
+          fetchCallSummaries();
         });
 
         sseConnection.onerror = (err) => {

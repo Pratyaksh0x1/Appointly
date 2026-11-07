@@ -11,6 +11,8 @@ import {
   CallbackRequest,
   BookingRequestInput,
   BookingResult,
+  DoctorCallSummary,
+  ReminderRecord,
 } from '../types/index.js';
 import { maskPhone, rootLogger } from '../logger/logger.js';
 import { kolkataToUtc, addMinutes } from '../utils/timezone.js';
@@ -535,6 +537,184 @@ export class PostgresDatabaseClient implements IDatabaseClient {
       return { success: false, message: 'Callback request not found' };
     }
     return { success: true, message: `Callback request ${callbackId} resolved.` };
+  }
+
+  public async findAppointmentForVerification(
+    patientName: string,
+    last4Phone: string
+  ): Promise<Appointment | null> {
+    const cleanLast4 = last4Phone.replace(/\D/g, '').slice(-4);
+    const res = await this.pool.query(
+      `SELECT a.*, d.name as doctor_name
+       FROM appointments a
+       LEFT JOIN doctors d ON a.doctor_id = d.id
+       WHERE (a.status = 'CONFIRMED' OR a.status = 'RESCHEDULED')
+         AND LOWER(a.patient_name) LIKE LOWER($1)
+         AND (a.patient_phone_masked LIKE $2 OR a.patient_phone_masked LIKE $3)
+       ORDER BY a.created_at DESC
+       LIMIT 1`,
+      [`%${patientName.trim()}%`, `%${cleanLast4}`, `%${cleanLast4}%`]
+    );
+    if (res.rows.length === 0) return null;
+    return this.mapAppointmentRow(res.rows[0]);
+  }
+
+  public async saveCallSummary(summary: DoctorCallSummary): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO calls (id, patient_phone_masked, status, summary, started_at, ended_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (id) DO UPDATE SET
+         patient_phone_masked = EXCLUDED.patient_phone_masked,
+         status = EXCLUDED.status,
+         summary = EXCLUDED.summary,
+         ended_at = EXCLUDED.ended_at`,
+      [
+        summary.callId,
+        summary.patientPhoneMasked,
+        summary.outcome === 'EMERGENCY_ESCALATED' ? 'ESCALATED' : 'COMPLETED',
+        JSON.stringify({
+          patientName: summary.patientName,
+          concern: summary.concern,
+          preferredTime: summary.preferredTime,
+          outcome: summary.outcome,
+          aiSummary: summary.aiSummary,
+          doctorName: summary.doctorName,
+          doctorId: summary.doctorId,
+          appointmentId: summary.appointmentId,
+        }),
+        summary.createdAt,
+        new Date(),
+      ]
+    );
+    await this.saveOutboxEvent(
+      `out_sum_${summary.callId}`,
+      'call_summary_created',
+      summary as unknown as Record<string, unknown>
+    );
+  }
+
+  public async getCallSummaries(limit = 20): Promise<DoctorCallSummary[]> {
+    const res = await this.pool.query(`SELECT * FROM calls ORDER BY started_at DESC LIMIT $1`, [
+      limit,
+    ]);
+    return res.rows.map((r) => {
+      let parsedSummary: any = {};
+      try {
+        parsedSummary = JSON.parse(r.summary || '{}');
+      } catch {
+        parsedSummary = { aiSummary: r.summary };
+      }
+      return {
+        id: String(r.id),
+        callId: String(r.id),
+        patientName: parsedSummary.patientName || 'Patient',
+        patientPhoneMasked: String(r.patient_phone_masked || '**********'),
+        concern: parsedSummary.concern || 'General consultation',
+        preferredTime: parsedSummary.preferredTime || 'As scheduled',
+        outcome:
+          parsedSummary.outcome || (r.status === 'ESCALATED' ? 'EMERGENCY_ESCALATED' : 'BOOKED'),
+        aiSummary: parsedSummary.aiSummary || r.summary || 'Consultation completed.',
+        doctorName: parsedSummary.doctorName,
+        doctorId: parsedSummary.doctorId,
+        appointmentId: parsedSummary.appointmentId,
+        createdAt: new Date(String(r.started_at)),
+      };
+    });
+  }
+
+  public async scheduleAppointmentReminders(appointment: Appointment): Promise<void> {
+    const dateStr = appointment.appointmentDate || '2026-11-20';
+    const timeStr = appointment.startTime || '17:00';
+    const [h, m] = timeStr.split(':').map((v) => parseInt(v, 10));
+    const appointmentTime = new Date(
+      `${dateStr}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00Z`
+    );
+
+    const time24h = new Date(appointmentTime.getTime() - 24 * 60 * 60 * 1000);
+    const time2h = new Date(appointmentTime.getTime() - 2 * 60 * 60 * 1000);
+
+    const r24 = {
+      id: `rem_24h_${appointment.id}`,
+      appointmentId: appointment.id,
+      patientName: appointment.patientName,
+      patientPhoneMasked: appointment.patientPhoneMasked || maskPhone('9876543210'),
+      doctorName: appointment.doctorName || 'Dr. Sharma',
+      appointmentDate: dateStr,
+      startTime: timeStr,
+      reminderType: '24h',
+      channel: 'SMS_AND_VOICE',
+      scheduledFor: time24h.toISOString(),
+      status: 'PENDING',
+    };
+
+    const r2 = {
+      id: `rem_2h_${appointment.id}`,
+      appointmentId: appointment.id,
+      patientName: appointment.patientName,
+      patientPhoneMasked: appointment.patientPhoneMasked || maskPhone('9876543210'),
+      doctorName: appointment.doctorName || 'Dr. Sharma',
+      appointmentDate: dateStr,
+      startTime: timeStr,
+      reminderType: '2h',
+      channel: 'SMS_AND_VOICE',
+      scheduledFor: time2h.toISOString(),
+      status: 'PENDING',
+    };
+
+    await this.saveOutboxEvent(`out_${r24.id}`, 'appointment_reminder', r24);
+    await this.saveOutboxEvent(`out_${r2.id}`, 'appointment_reminder', r2);
+  }
+
+  public async pollPendingReminders(dueOnly: boolean = true): Promise<ReminderRecord[]> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const timeFilter = dueOnly
+        ? `AND ((payload->>'scheduledFor')::timestamptz <= NOW() OR (payload->>'scheduledFor') IS NULL)`
+        : '';
+      const res = await client.query(
+        `SELECT * FROM outbox 
+         WHERE event_type = 'appointment_reminder' 
+           AND status = 'PENDING'
+           ${timeFilter}
+         ORDER BY created_at ASC
+         LIMIT 10
+         FOR UPDATE SKIP LOCKED`
+      );
+      const reminders: ReminderRecord[] = res.rows.map((row) => {
+        const p = typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload;
+        return {
+          id: String(row.id),
+          appointmentId: String(p.appointmentId),
+          patientName: String(p.patientName),
+          patientPhoneMasked: String(p.patientPhoneMasked),
+          doctorName: String(p.doctorName),
+          appointmentDate: String(p.appointmentDate),
+          startTime: String(p.startTime),
+          reminderType: p.reminderType as '24h' | '2h',
+          channel: 'SMS_AND_VOICE',
+          scheduledFor: new Date(String(p.scheduledFor || row.created_at)),
+          status: 'PENDING',
+        };
+      });
+      await client.query('COMMIT');
+      return reminders;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  public async markReminderProcessed(id: string, scriptGenerated?: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE outbox 
+       SET status = 'PROCESSED', processed_at = NOW(),
+           payload = jsonb_set(COALESCE(payload, '{}'::jsonb), '{scriptGenerated}', $2::jsonb)
+       WHERE id = $1`,
+      [id, JSON.stringify(scriptGenerated || '')]
+    );
   }
 
   private mapDoctorRow(row: Record<string, unknown>): Doctor {

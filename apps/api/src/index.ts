@@ -28,6 +28,7 @@ import {
   CLINIC_DOCTOR_ROSTER,
 } from './auth/jwt-auth.js';
 import { emitOutboxEvent, startOutboxRelay, stopOutboxRelay } from './db/outbox-relay.js';
+import { startReminderJob, stopReminderJob } from './reminders/reminder-job.js';
 
 let isShuttingDown = false;
 const sseClients = new Set<http.ServerResponse>();
@@ -498,6 +499,18 @@ export function createServer() {
         return;
       }
 
+      // 7c. Doctor Call Summaries (Protected: requires doctor auth)
+      if (req.method === 'GET' && pathname === '/api/calls') {
+        const authDoctor = requireDoctorAuth(req, res);
+        if (!authDoctor) return;
+
+        const limit = parseInt(parsedUrl.searchParams.get('limit') || '25', 10);
+        const summaries = await db.getCallSummaries(limit);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(summaries));
+        return;
+      }
+
       // 8. Cost meter summary
       if (req.method === 'GET' && pathname === '/api/cost') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -784,6 +797,7 @@ export async function startApp() {
   await db.initialize();
   await initAudioCache();
   startOutboxRelay(1000);
+  startReminderJob(5000);
   const doctors = await db.getDoctors();
   rootLogger.info(`Connected to database. Loaded ${doctors.length} clinic doctors.`, {
     doctorsCount: doctors.length,
@@ -796,6 +810,7 @@ export async function startApp() {
     if (isShuttingDown) return;
     isShuttingDown = true;
     stopOutboxRelay();
+    stopReminderJob();
     rootLogger.info(`Received ${signal}. Initiating graceful shutdown...`);
 
     // Notify connected SSE clients

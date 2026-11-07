@@ -20,6 +20,7 @@ import {
   createSession,
   processConversationTurn,
   ConversationSession,
+  handleCallDropped,
 } from '../agent/orchestrator.js';
 import { getProviders } from '../adapters/index.js';
 import { rootLogger, maskPhone } from '../logger/logger.js';
@@ -394,6 +395,11 @@ export class RealtimeVoiceSession {
       this.abortController.abort();
       this.abortController = null;
     }
+
+    // Edge Case 5: Call dropped before confirmation (Hold expires, zero ghost booking)
+    handleCallDropped(this.conversationSession).catch((err) => {
+      rootLogger.warn('[VoiceSession] Error in handleCallDropped on teardown', { err });
+    });
 
     rootLogger.info(`[VoiceSession] Session closed: ${this.callId} (${reason})`, {
       callId: this.callId,

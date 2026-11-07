@@ -11,6 +11,8 @@ import {
   CallbackRequest,
   BookingRequestInput,
   BookingResult,
+  DoctorCallSummary,
+  ReminderRecord,
 } from '../types/index.js';
 import { maskPhone } from '../logger/logger.js';
 
@@ -79,6 +81,8 @@ export class MemoryDatabaseClient implements IDatabaseClient {
   private slotLockMap: Map<string, Appointment> = new Map(); // key = `${doctorId}:${date}:${startTime}`
   private callbackRequests: CallbackRequest[] = [];
   private outboxEvents: any[] = [];
+  private callSummaries: DoctorCallSummary[] = [];
+  private reminders: ReminderRecord[] = [];
 
   // Simple async lock to emulate atomic DB transaction
   private transactionMutex: Promise<void> = Promise.resolve();
@@ -412,12 +416,112 @@ export class MemoryDatabaseClient implements IDatabaseClient {
     return { success: true, message: `Callback request ${callbackId} resolved.` };
   }
 
+  public async findAppointmentForVerification(
+    patientName: string,
+    last4Phone: string
+  ): Promise<Appointment | null> {
+    const normSearchName = patientName.trim().toLowerCase();
+    const cleanLast4 = last4Phone.replace(/\D/g, '').slice(-4);
+
+    for (const apt of this.appointments.values()) {
+      if (apt.status !== 'CONFIRMED' && apt.status !== 'RESCHEDULED') continue;
+
+      const normAptName = (apt.patientName || '').trim().toLowerCase();
+      const nameMatches =
+        normAptName === normSearchName ||
+        normAptName.includes(normSearchName) ||
+        normSearchName.includes(normAptName);
+
+      const phoneDigits = (apt.patientPhoneMasked || (apt as any).patientPhone || '').replace(
+        /\D/g,
+        ''
+      );
+      const last4Matches = phoneDigits.endsWith(cleanLast4);
+
+      if (nameMatches && last4Matches) {
+        return apt;
+      }
+    }
+    return null;
+  }
+
+  public async saveCallSummary(summary: DoctorCallSummary): Promise<void> {
+    this.callSummaries.unshift(summary);
+    await this.saveOutboxEvent(`out_sum_${summary.callId}`, 'call_summary_created', summary as any);
+  }
+
+  public async getCallSummaries(limit = 20): Promise<DoctorCallSummary[]> {
+    return this.callSummaries.slice(0, limit);
+  }
+
+  public async scheduleAppointmentReminders(appointment: Appointment): Promise<void> {
+    const dateStr = appointment.appointmentDate || '2026-11-20';
+    const timeStr = appointment.startTime || '17:00';
+    const [h, m] = timeStr.split(':').map((v) => parseInt(v, 10));
+    const appointmentTime = new Date(
+      `${dateStr}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00Z`
+    );
+
+    const time24h = new Date(appointmentTime.getTime() - 24 * 60 * 60 * 1000);
+    const time2h = new Date(appointmentTime.getTime() - 2 * 60 * 60 * 1000);
+
+    const r24: ReminderRecord = {
+      id: `rem_24h_${appointment.id}`,
+      appointmentId: appointment.id,
+      patientName: appointment.patientName,
+      patientPhoneMasked: appointment.patientPhoneMasked || maskPhone('9876543210'),
+      doctorName: appointment.doctorName || 'Dr. Sharma',
+      appointmentDate: dateStr,
+      startTime: timeStr,
+      reminderType: '24h',
+      channel: 'SMS_AND_VOICE',
+      scheduledFor: time24h,
+      status: 'PENDING',
+    };
+
+    const r2: ReminderRecord = {
+      id: `rem_2h_${appointment.id}`,
+      appointmentId: appointment.id,
+      patientName: appointment.patientName,
+      patientPhoneMasked: appointment.patientPhoneMasked || maskPhone('9876543210'),
+      doctorName: appointment.doctorName || 'Dr. Sharma',
+      appointmentDate: dateStr,
+      startTime: timeStr,
+      reminderType: '2h',
+      channel: 'SMS_AND_VOICE',
+      scheduledFor: time2h,
+      status: 'PENDING',
+    };
+
+    this.reminders.push(r24, r2);
+    await this.saveOutboxEvent(`out_${r24.id}`, 'appointment_reminder', r24 as any);
+    await this.saveOutboxEvent(`out_${r2.id}`, 'appointment_reminder', r2 as any);
+  }
+
+  public async pollPendingReminders(dueOnly: boolean = true): Promise<ReminderRecord[]> {
+    const now = new Date();
+    return this.reminders.filter(
+      (r) => r.status === 'PENDING' && (!dueOnly || !r.scheduledFor || r.scheduledFor <= now)
+    );
+  }
+
+  public async markReminderProcessed(id: string, scriptGenerated?: string): Promise<void> {
+    const rem = this.reminders.find((r) => r.id === id);
+    if (rem) {
+      rem.status = 'PROCESSED';
+      rem.scriptGenerated = scriptGenerated;
+      rem.sentAt = new Date();
+    }
+  }
+
   public reset(): void {
     this.appointments.clear();
     this.idempotencyMap.clear();
     this.slotLockMap.clear();
     this.callbackRequests = [];
     this.outboxEvents = [];
+    this.callSummaries = [];
+    this.reminders = [];
     this.seed();
   }
 }

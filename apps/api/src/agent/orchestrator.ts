@@ -23,6 +23,8 @@ import { executeAgentTool, ToolExecutionResponse } from './tools.js';
 import { getProviders } from '../adapters/index.js';
 import { rootLogger, maskPhone } from '../logger/logger.js';
 import { formatKolkata } from '../utils/timezone.js';
+import { getDatabaseClient } from '../db/index.js';
+import { generateAndSaveCallSummary } from '../services/call-summary-service.js';
 
 export type AgentState =
   | 'GREETING_CONSENT'
@@ -66,6 +68,9 @@ export interface ConversationSession {
   appointmentId?: string; // for cancel / reschedule
   confirmedBooking?: ConfirmedBookingDetails;
   turnCount: number;
+  isVerified?: boolean; // For secure voice reschedule/cancel (verified by name + phone last 4 digits)
+  silentTurns?: number; // Silence detection counter
+  suggestedNextDays?: { date: string; slots: string[] }[];
   history: { role: 'user' | 'assistant' | 'system'; content: string }[];
 }
 
@@ -142,6 +147,7 @@ export async function processConversationTurn(
 ): Promise<AgentTurnResponse> {
   session.turnCount++;
   const callId = session.callId;
+  let actionTaken: string | undefined = undefined;
 
   rootLogger.info(`[State Machine] Turn ${session.turnCount} start. State: ${session.state}`, {
     callId,
@@ -149,6 +155,60 @@ export async function processConversationTurn(
     turnCount: session.turnCount,
     patientPhoneMasked: maskPhone(session.patientPhone),
   });
+
+  // Edge Case 4: Patient Silence Detection
+  if (!rawUserInput || rawUserInput.trim().length === 0) {
+    session.silentTurns = (session.silentTurns || 0) + 1;
+    if (session.silentTurns === 1) {
+      const reply =
+        'Namaste? Kya aap mujhe sun pa rahe hain? Kripya batayein aapko kis doctor ke sath appointment schedule karna hai.';
+      session.history.push({ role: 'assistant', content: reply });
+      return {
+        sessionId: session.sessionId,
+        state: session.state,
+        replyText: reply,
+        isTerminal: false,
+        actionTaken: 'SILENCE_PROMPT_1',
+      };
+    } else if (session.silentTurns === 2) {
+      const reply =
+        'Aapki aawaz nahi aa rahi hai. Yadi aapko appointment lena hai to kripya bolein, ya thodi der baad call karein.';
+      session.history.push({ role: 'assistant', content: reply });
+      return {
+        sessionId: session.sessionId,
+        state: session.state,
+        replyText: reply,
+        isTerminal: false,
+        actionTaken: 'SILENCE_PROMPT_2',
+      };
+    } else {
+      if (session.holdId) {
+        await executeAgentTool('release_hold', { holdId: session.holdId }, { callId }).catch(
+          () => {}
+        );
+        session.holdId = undefined;
+      }
+      const reply = 'Call disconnect ki ja rahi hai. Arogya Clinic call karne ke liye dhanyawad.';
+      session.history.push({ role: 'assistant', content: reply });
+      session.state = 'FALLBACK';
+      await generateAndSaveCallSummary({
+        callId,
+        patientName: session.patientName,
+        patientPhone: session.patientPhone,
+        history: session.history,
+        state: session.state,
+        intent: session.intent,
+      });
+      return {
+        sessionId: session.sessionId,
+        state: session.state,
+        replyText: reply,
+        isTerminal: true,
+        actionTaken: 'PATIENT_SILENT_DISCONNECT',
+      };
+    }
+  }
+  session.silentTurns = 0;
 
   // =========================================================================
   // 1. PROMPT INJECTION DEFENSE (Untrusted Speech Guardrail)
@@ -271,12 +331,59 @@ export async function processConversationTurn(
   session.history.push({ role: 'user', content: sanitizedInput });
 
   // =========================================================================
+  // 3.5. EDGE CASE 1: PATIENT CHANGES MIND MID-CALL (DOCTOR OR DATE SWITCH)
+  // =========================================================================
+  let switchDoctor: { id: string; name: string; specialty: string } | null = null;
+  for (const [key, docInfo] of Object.entries(DOCTOR_LOOKUP)) {
+    if (lower.includes(key) && session.doctorId && docInfo.id !== session.doctorId) {
+      if (
+        /\b(nahi|change|badal|dusre|doosre|se\s*milna|dikhao|dikhana|ko\s*dikha)\b/i.test(lower) ||
+        lower.includes(key)
+      ) {
+        switchDoctor = docInfo;
+        break;
+      }
+    }
+  }
+
+  const mentionsDateChange =
+    /\b(kal\s*nahi|parson|tarikh|date\s*change|badal\s*do|dusre\s*din|doosre\s*din)\b/i.test(
+      lower
+    ) && dtResolved.confidence > 0.5;
+
+  if (
+    (switchDoctor || mentionsDateChange) &&
+    ['OFFER_SLOTS', 'CONFIRM_READBACK', 'COLLECT_DETAILS'].includes(session.state)
+  ) {
+    if (session.holdId) {
+      await executeAgentTool('release_hold', { holdId: session.holdId }, { callId }).catch(
+        () => {}
+      );
+      session.holdId = undefined;
+    }
+    session.selectedSlot = undefined;
+    session.offeredSlots = [];
+
+    if (switchDoctor) {
+      session.doctorId = switchDoctor.id;
+      session.doctorName = switchDoctor.name;
+      session.specialty = switchDoctor.specialty;
+    }
+    if (mentionsDateChange && dtResolved.dateStr) {
+      session.targetDate = dtResolved.dateStr;
+      session.targetDayOfWeek = dtResolved.dayOfWeek;
+    }
+
+    session.state = 'COLLECT_DETAILS';
+    actionTaken = 'MIND_CHANGE_SWITCH';
+  }
+
+  // =========================================================================
   // 4. STATE MACHINE TRANSITIONS & TOOL EXECUTION
   // =========================================================================
 
   let replyText = '';
   let isTerminal = false;
-  let actionTaken: string | undefined = undefined;
 
   switch (session.state) {
     case 'GREETING_CONSENT': {
@@ -289,15 +396,25 @@ export async function processConversationTurn(
     case 'UNDERSTAND_INTENT': {
       if (session.intent === 'CANCEL') {
         session.state = 'CANCEL';
-        replyText =
-          'Ji, main aapki appointment cancel karne mein madad karti hoon. Kripya apna Appointment ID batayein.';
+        if (session.appointmentId) {
+          replyText =
+            'Ji, main aapki appointment cancel karne mein madad karti hoon. Kya main cancel confirm kar doon?';
+        } else {
+          replyText =
+            'Ji, main aapki appointment cancel karne mein madad karti hoon. Suraksha ke liye, kripya apna poora naam aur registered mobile number ke aakhri 4 digits batayein.';
+        }
         break;
       }
 
       if (session.intent === 'RESCHEDULE') {
         session.state = 'RESCHEDULE';
-        replyText =
-          'Ji, appointment reschedule kar dete hain. Kripya apna Appointment ID aur naya samay batayein.';
+        if (session.appointmentId) {
+          replyText =
+            'Ji, appointment reschedule kar dete hain. Kripya naya din aur samay batayein.';
+        } else {
+          replyText =
+            'Ji, appointment reschedule kar dete hain. Suraksha ke liye, kripya apna poora naam aur registered mobile number ke aakhri 4 digits batayein.';
+        }
         break;
       }
 
@@ -321,6 +438,55 @@ export async function processConversationTurn(
     }
 
     case 'COLLECT_DETAILS': {
+      // Check if user was previously offered next 2 days because preferred date had no slots
+      if (session.suggestedNextDays && session.suggestedNextDays.length > 0) {
+        if (/\b(callback|call\s*karna|baad\s*me|phone\s*karo|nahi|mat\s*karo)\b/i.test(lower)) {
+          await executeAgentTool(
+            'save_callback_request',
+            {
+              patientPhone: session.patientPhone,
+              patientName: session.patientName,
+              reason: `No slots on requested date; patient opted for callback`,
+            },
+            { callId }
+          );
+          session.suggestedNextDays = undefined;
+          session.state = 'FALLBACK';
+          isTerminal = true;
+          actionTaken = 'CALLBACK_SAVED_NO_SLOTS';
+          replyText =
+            'Humne aapka callback request note kar liya hai. Hamari clinic reception team jald hi aapse sampark karegi. Dhanyawad!';
+
+          await generateAndSaveCallSummary({
+            callId,
+            patientName: session.patientName,
+            patientPhone: session.patientPhone,
+            history: session.history,
+            state: session.state,
+            intent: session.intent,
+            callbackReason: 'Patient opted for callback after no slots',
+          }).catch(() => {});
+          break;
+        }
+
+        // Check if user chose one of the suggested days
+        const matchedDay = session.suggestedNextDays.find(
+          (d) =>
+            lower.includes(d.date) ||
+            (lower.includes('pehla') && d === session.suggestedNextDays![0]) ||
+            (lower.includes('dusra') && d === session.suggestedNextDays![1])
+        );
+        if (matchedDay) {
+          session.targetDate = matchedDay.date;
+          session.offeredSlots = matchedDay.slots.slice(0, 2);
+          session.suggestedNextDays = undefined;
+          session.state = 'OFFER_SLOTS';
+          actionTaken = 'SLOTS_OFFERED';
+          replyText = `${formatDoc(session.doctorName)} ke paas ${session.targetDate} ko ${session.offeredSlots.join(' aur ')} baje slots available hain. Aap kaunsa samay lena chahenge?`;
+          break;
+        }
+      }
+
       // 1. Need Doctor
       if (!session.doctorId) {
         replyText =
@@ -334,7 +500,7 @@ export async function processConversationTurn(
         break;
       }
 
-      // 3. We have Doctor and Date! Now query slots and transition to OFFER_SLOTS (strictly MAX 2 slots offered)
+      // 3. We have Doctor and Date! Query slots from database
       const slotsResponse = await executeAgentTool(
         'check_slots',
         {
@@ -360,12 +526,13 @@ export async function processConversationTurn(
       };
 
       const available = slotsData.availableSlots || [];
-      if (available.length === 0) {
-        // Find next working day with available slots
-        let nextDayOffset = 1;
-        let foundNextSlots: { date: string; slots: string[] } | null = null;
 
-        while (nextDayOffset <= 6) {
+      // Edge Case 3: No slots available on requested date -> find next 2 available days
+      if (available.length === 0) {
+        let nextDayOffset = 1;
+        const foundDays: { date: string; slots: string[] }[] = [];
+
+        while (nextDayOffset <= 7 && foundDays.length < 2) {
           const checkNextDate = getDateOffsetStr(session.targetDate, nextDayOffset);
           const nextCheckRes = await executeAgentTool(
             'check_slots',
@@ -379,41 +546,52 @@ export async function processConversationTurn(
           if (nextCheckRes.success) {
             const nextData = nextCheckRes.data as { availableSlots: string[]; date: string };
             if (nextData.availableSlots && nextData.availableSlots.length > 0) {
-              foundNextSlots = { date: checkNextDate, slots: nextData.availableSlots };
-              break;
+              foundDays.push({ date: checkNextDate, slots: nextData.availableSlots.slice(0, 2) });
             }
           }
           nextDayOffset++;
         }
 
-        if (foundNextSlots) {
-          session.targetDate = foundNextSlots.date;
-          session.offeredSlots = foundNextSlots.slots.slice(0, 2);
+        session.suggestedNextDays = foundDays;
+
+        if (foundDays.length >= 1) {
+          const d1 = foundDays[0];
+          session.targetDate = d1.date;
+          session.offeredSlots = d1.slots.slice(0, 2);
           session.state = 'OFFER_SLOTS';
           actionTaken = 'SLOTS_OFFERED';
-          const docLabel = formatDoc(session.doctorName);
-          replyText = `${docLabel} ke paas agle working day (${foundNextSlots.date}) ko do slots available hain: ${session.offeredSlots[0]} baje aur ${session.offeredSlots[1]} baje. Aap kaunsa samay lena chahenge?`;
+
+          if (foundDays.length >= 2) {
+            const d2 = foundDays[1];
+            replyText = `Maaf kijiye, ${session.targetDate} ko slot open nahi hai. Lekin agle din (${d1.date}) ko ${session.offeredSlots.join(' aur ')} baje, aur ${d2.date} ko ${d2.slots.join(' aur ')} baje slots available hain. Aap kaunsa samay lena chahenge?`;
+          } else {
+            replyText = `Maaf kijiye, us din slot nahi hai. Lekin agle working day (${d1.date}) ko ${session.offeredSlots.join(' aur ')} baje slot open hai. Kya yeh theek rahega?`;
+          }
           break;
         } else {
-          replyText = `${formatDoc(session.doctorName)} ke paas ${session.targetDate} ko koi slot open nahi hai. Kya main callback request note kar loon?`;
+          replyText = `${formatDoc(session.doctorName)} ke paas agle kuch dino mein koi slot open nahi hai. Kya main aapka callback request note kar loon?`;
+          actionTaken = 'NO_SLOTS_AVAILABLE';
           break;
         }
       }
 
-      // Filter slots according to time preference if any
+      // Edge Case 2: Ambiguous Time Filter (e.g. "shaam ko", "subah", "afternoon")
       let filteredSlots = available;
+      let windowEmpty = false;
       if (session.timePreference === 'evening') {
-        filteredSlots = available.filter((s) => parseInt(s.split(':')[0], 10) >= 17);
+        const ev = available.filter((s) => parseInt(s.split(':')[0], 10) >= 17);
+        if (ev.length > 0) filteredSlots = ev;
+        else windowEmpty = true;
       } else if (session.timePreference === 'morning') {
-        filteredSlots = available.filter((s) => parseInt(s.split(':')[0], 10) < 13);
+        const morn = available.filter((s) => parseInt(s.split(':')[0], 10) < 13);
+        if (morn.length > 0) filteredSlots = morn;
+        else windowEmpty = true;
       } else if (session.timePreference === 'afternoon') {
-        filteredSlots = available.filter(
+        const aft = available.filter(
           (s) => parseInt(s.split(':')[0], 10) >= 13 && parseInt(s.split(':')[0], 10) < 17
         );
-      }
-
-      if (filteredSlots.length === 0) {
-        filteredSlots = available; // Fall back to all available if preferred window has no slots
+        if (aft.length > 0) filteredSlots = aft;
+        else windowEmpty = true;
       }
 
       // STRICT NON-NEGOTIABLE RULE: Offer at most 2 slots on voice!
@@ -422,7 +600,15 @@ export async function processConversationTurn(
       actionTaken = 'SLOTS_OFFERED';
 
       const docLabel = formatDoc(session.doctorName);
-      if (session.offeredSlots.length === 1) {
+      if (windowEmpty) {
+        const windowLabel =
+          session.timePreference === 'evening'
+            ? 'shaam'
+            : session.timePreference === 'morning'
+              ? 'subah'
+              : 'dopahar';
+        replyText = `${docLabel} ke paas ${session.targetDate} ko ${windowLabel} mein koi slot nahi hai, par ${session.offeredSlots.join(' aur ')} baje available hain. Kya yeh samay chalega?`;
+      } else if (session.offeredSlots.length === 1) {
         replyText = `${docLabel} ke paas ${session.targetDate} ko ${session.offeredSlots[0]} baje ka slot available hai. Kya yeh samay theek rahega?`;
       } else {
         replyText = `${docLabel} ke paas ${session.targetDate} ko do slots available hain: ${session.offeredSlots[0]} baje aur ${session.offeredSlots[1]} baje. Aap kaunsa samay lena chahenge?`;
@@ -431,6 +617,41 @@ export async function processConversationTurn(
     }
 
     case 'OFFER_SLOTS': {
+      // Check if caller requests a callback instead
+      if (/\b(callback|baad\s*me|call\s*karna|phone\s*karo)\b/i.test(lower)) {
+        await executeAgentTool(
+          'save_callback_request',
+          {
+            patientPhone: session.patientPhone,
+            patientName: session.patientName,
+            reason: `Patient requested callback during slot offer`,
+          },
+          { callId }
+        );
+        if (session.holdId) {
+          await executeAgentTool('release_hold', { holdId: session.holdId }, { callId }).catch(
+            () => {}
+          );
+          session.holdId = undefined;
+        }
+        session.state = 'FALLBACK';
+        isTerminal = true;
+        actionTaken = 'CALLBACK_SAVED_NO_SLOTS';
+        replyText =
+          'Humne aapka callback request note kar liya hai. Hamari clinic team jald hi aapse sampark karegi. Dhanyawad!';
+
+        await generateAndSaveCallSummary({
+          callId,
+          patientName: session.patientName,
+          patientPhone: session.patientPhone,
+          history: session.history,
+          state: session.state,
+          intent: session.intent,
+          callbackReason: 'Patient opted for callback',
+        }).catch(() => {});
+        break;
+      }
+
       // Check which slot caller picked
       let chosenSlot = session.offeredSlots.find(
         (s) => s && (lower.includes(s) || lower.includes(s.replace(':', ' ')))
@@ -549,12 +770,51 @@ export async function processConversationTurn(
         isTerminal = true;
         actionTaken = 'APPOINTMENT_BOOKED';
 
+        // Schedule 24h and 2h outbound reminders in outbox
+        const db = getDatabaseClient();
+        await db
+          .scheduleAppointmentReminders({
+            id: apptData.appointmentId,
+            doctorId: session.doctorId || 'dr_sharma',
+            doctorName: apptData.doctorName,
+            patientName: session.patientName || 'Patient',
+            patientPhoneMasked: maskPhone(session.patientPhone),
+            appointmentDate: apptData.date,
+            startTime: apptData.startTime,
+            durationMinutes: apptData.durationMinutes,
+            status: 'CONFIRMED',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          } as any)
+          .catch((err) => {
+            rootLogger.warn('Error scheduling appointment reminders in outbox', { err });
+          });
+
         // MANDATORY NON-NEGOTIABLE READBACK FROM DB:
-        // Must include: Doctor Name, Date, Time, Duration!
+        // Must include: Doctor Name, Date, Time, Duration, and Clinic Instructions:
+        // (arrive 10 minutes early, bring prior records/prescriptions and ID proof)
         replyText =
           `Aapki appointment ${formatDoc(apptData.doctorName)} ke saath ${apptData.date} ko ` +
           `${apptData.startTime} baje confirm ho gayi hai. Consultation duration ${apptData.durationMinutes} minute rahegi. ` +
+          `Kripya clinic samay se 10 minute pehle pahunchein, aur apna purana prescription ya medical records aur identity proof sath layein. ` +
           `Arogya Clinic call karne ke liye dhanyawad!`;
+
+        // Save Doctor Call Summary (Rule 4: strictly non-diagnostic)
+        await generateAndSaveCallSummary({
+          callId,
+          patientName: session.patientName,
+          patientPhone: session.patientPhone,
+          history: session.history,
+          state: session.state,
+          intent: session.intent,
+          doctorId: session.doctorId,
+          doctorName: session.doctorName,
+          appointmentId: apptData.appointmentId,
+          targetDate: apptData.date,
+          targetTime: apptData.startTime,
+        }).catch((err) => {
+          rootLogger.warn('Error saving call summary for booked appointment', { err });
+        });
         break;
       }
 
@@ -566,25 +826,85 @@ export async function processConversationTurn(
     }
 
     case 'RESCHEDULE': {
-      // Find appointment ID or reschedule directly
-      const apptId = session.appointmentId || 'seed_appt_sharma_1';
-      const targetDate = session.targetDate || '2026-11-12';
-      const targetTime = session.preferredTimeStr || '18:00';
+      const db = getDatabaseClient();
+
+      // Verification step: Patient Name + Last 4 digits of phone
+      if (!session.isVerified && !session.appointmentId) {
+        const digitsMatch = sanitizedInput.match(/\b(\d{4})\b/);
+        const last4 = digitsMatch ? digitsMatch[1] : undefined;
+
+        let patientName = session.patientName;
+        if (!patientName) {
+          const nameMatch = sanitizedInput.match(
+            /(?:naam|name\s*(?:is)?|mera\s*naam)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i
+          );
+          if (nameMatch && nameMatch[1]) {
+            patientName = nameMatch[1].trim();
+            session.patientName = patientName;
+          } else {
+            const words = sanitizedInput.trim().split(/\s+/);
+            if (
+              words.length >= 1 &&
+              words.length <= 3 &&
+              !/\b(reschedule|cancel|appointment|phone|number)\b/i.test(lower)
+            ) {
+              patientName = words
+                .filter((w) => !/^\d+$/.test(w))
+                .join(' ')
+                .trim();
+              if (patientName) session.patientName = patientName;
+            }
+          }
+        }
+
+        if (!last4 || !session.patientName) {
+          replyText =
+            'Suraksha ke liye, kripya apna poora naam aur registered mobile number ke aakhri 4 digits batayein.';
+          break;
+        }
+
+        // Perform database verification without leaking PHI
+        const verifiedAppt = await db.findAppointmentForVerification(session.patientName, last4);
+        if (!verifiedAppt) {
+          replyText =
+            'Maaf kijiye, diye gaye naam aur number ke sath koi active appointment nahi mili. Kripya apna naam aur aakhri 4 digits dobara check karein, ya reception callback ke liye bolein.';
+          actionTaken = 'VERIFICATION_FAILED_NO_PHI';
+          break;
+        }
+
+        session.isVerified = true;
+        session.appointmentId = verifiedAppt.id;
+        session.doctorId = verifiedAppt.doctorId;
+        session.doctorName = verifiedAppt.doctorName;
+        session.patientName = verifiedAppt.patientName;
+        session.targetDate = verifiedAppt.appointmentDate || verifiedAppt.displayDateKolkata;
+        actionTaken = 'CALLER_VERIFIED';
+
+        replyText =
+          `Ji ${session.patientName}, aapki appointment Dr. ${formatDoc(session.doctorName)} ke sath ` +
+          `${verifiedAppt.appointmentDate || verifiedAppt.displayDateKolkata} ko ${verifiedAppt.startTime} baje schedule hai. ` +
+          `Naya appointment aap kis din aur samay par chahte hain?`;
+        break;
+      }
+
+      // Caller is VERIFIED! Now handle new date/time selection
+      const newDate =
+        dtResolved.confidence > 0.6 ? dtResolved.dateStr : session.targetDate || '2026-11-12';
+      const newTime = dtResolved.preferredTimeStr || session.preferredTimeStr || '17:30';
 
       const reschedRes = await executeAgentTool(
         'reschedule_appointment',
         {
-          appointmentId: apptId,
-          newDate: targetDate,
-          newStartTime: targetTime,
+          appointmentId: session.appointmentId!,
+          newDate,
+          newStartTime: newTime,
           patientPhone: session.patientPhone,
         },
         { callId }
       );
 
       if (!reschedRes.success || !reschedRes.data) {
-        replyText = `Appointment reschedule nahi ho saki: ${reschedRes.userMessage || reschedRes.error}`;
-        session.state = 'FALLBACK';
+        replyText = `Appointment reschedule nahi ho saki: ${reschedRes.userMessage || reschedRes.error}. Kya aap koi doosra samay chuna chahenge?`;
         break;
       }
 
@@ -600,36 +920,141 @@ export async function processConversationTurn(
       isTerminal = true;
       actionTaken = 'APPOINTMENT_RESCHEDULED';
 
-      // Read back updated doctor, date, time, duration
+      // Read back updated doctor, date, time, duration with clinic arrival instructions
       replyText =
-        `Aapki appointment successfully reschedule ho gayi hai. Naya appointment: Dr. ${reschedData.doctorName}, ` +
-        `tarikh ${reschedData.newDate} ko ${reschedData.newStartTime} baje. Consultation duration ${reschedData.durationMinutes} minute rahegi. Dhanyawad!`;
+        `Aapki appointment successfully reschedule ho gayi hai. Naya appointment: Dr. ${formatDoc(reschedData.doctorName)}, ` +
+        `tarikh ${reschedData.newDate} ko ${reschedData.newStartTime} baje. Consultation duration ${reschedData.durationMinutes} minute rahegi. ` +
+        `Kripya clinic samay se 10 minute pehle pahunchein. Dhanyawad!`;
+
+      await generateAndSaveCallSummary({
+        callId,
+        patientName: session.patientName,
+        patientPhone: session.patientPhone,
+        history: session.history,
+        state: session.state,
+        intent: session.intent,
+        doctorId: session.doctorId,
+        doctorName: session.doctorName,
+        appointmentId: session.appointmentId,
+        targetDate: reschedData.newDate,
+        targetTime: reschedData.newStartTime,
+      }).catch(() => {});
       break;
     }
 
     case 'CANCEL': {
-      const apptId = session.appointmentId || 'seed_appt_sharma_1';
-      const cancelRes = await executeAgentTool(
-        'cancel_appointment',
-        {
-          appointmentId: apptId,
-          patientPhone: session.patientPhone,
-          cancellationReason: 'Cancelled by patient in conversation',
-        },
-        { callId }
-      );
+      const db = getDatabaseClient();
 
-      if (!cancelRes.success) {
-        replyText = `Appointment cancel karne mein dikkat aayi: ${cancelRes.userMessage || cancelRes.error}`;
-        session.state = 'FALLBACK';
+      // Verification step: Patient Name + Last 4 digits of phone
+      if (!session.isVerified && !session.appointmentId) {
+        const digitsMatch = sanitizedInput.match(/\b(\d{4})\b/);
+        const last4 = digitsMatch ? digitsMatch[1] : undefined;
+
+        let patientName = session.patientName;
+        if (!patientName) {
+          const nameMatch = sanitizedInput.match(
+            /(?:naam|name\s*(?:is)?|mera\s*naam)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i
+          );
+          if (nameMatch && nameMatch[1]) {
+            patientName = nameMatch[1].trim();
+            session.patientName = patientName;
+          } else {
+            const words = sanitizedInput.trim().split(/\s+/);
+            if (
+              words.length >= 1 &&
+              words.length <= 3 &&
+              !/\b(cancel|appointment|phone|number)\b/i.test(lower)
+            ) {
+              patientName = words
+                .filter((w) => !/^\d+$/.test(w))
+                .join(' ')
+                .trim();
+              if (patientName) session.patientName = patientName;
+            }
+          }
+        }
+
+        if (!last4 || !session.patientName) {
+          replyText =
+            'Suraksha ke liye, kripya apna poora naam aur registered mobile number ke aakhri 4 digits batayein.';
+          break;
+        }
+
+        // Perform database verification without leaking PHI
+        const verifiedAppt = await db.findAppointmentForVerification(session.patientName, last4);
+        if (!verifiedAppt) {
+          replyText =
+            'Maaf kijiye, diye gaye naam aur number ke sath koi active appointment nahi mili. Kripya apna naam aur aakhri 4 digits dobara check karein, ya reception callback ke liye bolein.';
+          actionTaken = 'VERIFICATION_FAILED_NO_PHI';
+          break;
+        }
+
+        session.isVerified = true;
+        session.appointmentId = verifiedAppt.id;
+        session.doctorId = verifiedAppt.doctorId;
+        session.doctorName = verifiedAppt.doctorName;
+        session.patientName = verifiedAppt.patientName;
+        session.targetDate = verifiedAppt.appointmentDate || verifiedAppt.displayDateKolkata;
+        actionTaken = 'CALLER_VERIFIED';
+
+        replyText =
+          `Ji ${session.patientName}, aapki appointment Dr. ${formatDoc(session.doctorName)} ke sath ` +
+          `${verifiedAppt.appointmentDate || verifiedAppt.displayDateKolkata} ko ${verifiedAppt.startTime} baje schedule hai. ` +
+          `Kya aap ise sach mein cancel karna chahte hain?`;
         break;
       }
 
-      session.state = 'CANCEL';
-      isTerminal = true;
-      actionTaken = 'APPOINTMENT_CANCELLED';
-      replyText =
-        'Aapki appointment successfully cancel kar di gayi hai aur slot release ho gaya hai. Arogya Clinic mein dobara sampark karne ke liye shukriya!';
+      // Caller is VERIFIED! Check confirmation
+      const isAffirmative = /\b(haan|ji|yes|confirm|cancel\s*kardo|kar\s*do|theek\s*hai)\b/i.test(
+        lower
+      );
+      const isNegative = /\b(nahi|no|mat\s*karo|cancel\s*nahi)\b/i.test(lower);
+
+      if (isNegative) {
+        replyText =
+          'Koi baat nahi, aapki appointment active rahegi. Arogya Clinic call karne ke liye shukriya!';
+        isTerminal = true;
+        break;
+      }
+
+      if (isAffirmative || lower.includes('cancel')) {
+        const cancelRes = await executeAgentTool(
+          'cancel_appointment',
+          {
+            appointmentId: session.appointmentId!,
+            patientPhone: session.patientPhone,
+            cancellationReason: 'Cancelled by verified patient in voice session',
+          },
+          { callId }
+        );
+
+        if (!cancelRes.success) {
+          replyText = `Appointment cancel karne mein dikkat aayi: ${cancelRes.userMessage || cancelRes.error}`;
+          session.state = 'FALLBACK';
+          break;
+        }
+
+        session.state = 'CANCEL';
+        isTerminal = true;
+        actionTaken = 'APPOINTMENT_CANCELLED';
+        replyText =
+          'Aapki appointment successfully cancel kar di gayi hai aur slot release ho gaya hai. Arogya Clinic mein dobara sampark karne ke liye shukriya!';
+
+        await generateAndSaveCallSummary({
+          callId,
+          patientName: session.patientName,
+          patientPhone: session.patientPhone,
+          history: session.history,
+          state: session.state,
+          intent: session.intent,
+          doctorId: session.doctorId,
+          doctorName: session.doctorName,
+          appointmentId: session.appointmentId,
+        }).catch(() => {});
+        break;
+      }
+
+      replyText = `Kya main Dr. ${formatDoc(session.doctorName)} ke sath aapki appointment cancel kar doon?`;
       break;
     }
 
@@ -649,6 +1074,16 @@ export async function processConversationTurn(
       actionTaken = 'FALLBACK_CALLBACK_SAVED';
       replyText =
         'Humein khed hai ki system mein takneeki dikkat aayi hai. Humne aapka callback request note kar liya hai. Hamari reception team jald hi aapko call karegi.';
+
+      await generateAndSaveCallSummary({
+        callId,
+        patientName: session.patientName,
+        patientPhone: session.patientPhone,
+        history: session.history,
+        state: session.state,
+        intent: session.intent,
+        callbackReason: 'Fallback callback request saved',
+      }).catch(() => {});
       break;
     }
 
@@ -676,4 +1111,52 @@ export async function processConversationTurn(
     confirmedBooking: session.confirmedBooking,
     actionTaken,
   };
+}
+
+/**
+ * Handles dropped or prematurely disconnected calls.
+ * Non-negotiable Guarantee:
+ * Releases any active hold, ensures 0 ghost bookings in DB, and generates a structured call summary.
+ */
+export async function handleCallDropped(session: ConversationSession): Promise<void> {
+  const callId = session.callId;
+  rootLogger.info(
+    `[Call Lifecycle] Handling dropped call ${callId}. Current state: ${session.state}`,
+    {
+      callId,
+      state: session.state,
+      hasHold: !!session.holdId,
+      isBooked: !!session.confirmedBooking,
+    }
+  );
+
+  // If a temporary slot was held, immediately release it
+  if (session.holdId) {
+    await executeAgentTool('release_hold', { holdId: session.holdId }, { callId }).catch((err) => {
+      rootLogger.warn(`Failed to release hold on dropped call`, {
+        callId,
+        holdId: session.holdId,
+        err,
+      });
+    });
+    session.holdId = undefined;
+  }
+
+  // Only save summary if booking was not already finalized
+  if (session.state !== 'BOOKED') {
+    await generateAndSaveCallSummary({
+      callId,
+      patientName: session.patientName,
+      patientPhone: session.patientPhone,
+      history: session.history,
+      state: session.state,
+      intent: session.intent,
+      doctorId: session.doctorId,
+      doctorName: session.doctorName,
+      targetDate: session.targetDate,
+      targetTime: session.selectedSlot,
+    }).catch((err) => {
+      rootLogger.warn(`Failed to record call summary for dropped call`, { callId, err });
+    });
+  }
 }

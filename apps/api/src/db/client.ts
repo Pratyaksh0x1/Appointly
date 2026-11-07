@@ -9,6 +9,8 @@ import {
   CallbackRequest,
   BookingRequestInput,
   BookingResult,
+  DoctorCallSummary,
+  ReminderRecord,
 } from '../types/index.js';
 
 export interface IDatabaseClient {
@@ -58,6 +60,22 @@ export interface IDatabaseClient {
   ): Promise<BookingResult>;
   completeAppointment(appointmentId: string): Promise<{ success: boolean; message: string }>;
   resolveCallbackRequest(callbackId: string): Promise<{ success: boolean; message: string }>;
+
+  /** Phase 7: Caller verification for cancel/reschedule without PHI leakage */
+  findAppointmentForVerification(
+    patientName: string,
+    last4Phone: string
+  ): Promise<Appointment | null>;
+
+  /** Phase 7: Doctor Call Summary Lifecycle */
+  saveCallSummary(summary: DoctorCallSummary): Promise<void>;
+  getCallSummaries(limit?: number): Promise<DoctorCallSummary[]>;
+
+  /** Phase 7: Outbound Reminders (24h and 2h before) driven by outbox */
+  scheduleAppointmentReminders(appointment: Appointment): Promise<void>;
+  pollPendingReminders(dueOnly?: boolean): Promise<ReminderRecord[]>;
+  markReminderProcessed(id: string, scriptGenerated?: string): Promise<void>;
+
   saveOutboxEvent?(id: string, eventType: string, payload: Record<string, unknown>): Promise<void>;
   drainPendingOutbox?(): Promise<any[]>;
 }

@@ -421,6 +421,24 @@ export class BookingCoreService {
   }
 
   /**
+   * Releases an active hold immediately (e.g. when caller changes mind, picks another slot, or call drops).
+   */
+  public async releaseHold(holdToken: string): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query(`UPDATE slot_holds SET status = 'RELEASED' WHERE hold_token = $1`, [
+        holdToken,
+      ]);
+      return true;
+    } catch (err) {
+      rootLogger.warn('Error releasing hold in database', { holdToken, error: err });
+      return false;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * 3. bookAppointment
    * Atomically commits appointment in a single transaction.
    * Enforces:
