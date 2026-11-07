@@ -14,24 +14,31 @@ export class PostgresDatabaseClient implements IDatabaseClient {
   private pool: pg.Pool;
 
   constructor(connectionString: string) {
+    const isSsl = connectionString.includes('sslmode=') || connectionString.includes('neon.tech');
     this.pool = new pg.Pool({
       connectionString,
       max: 10,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+      connectionTimeoutMillis: 10000,
+      ssl: isSsl ? { rejectUnauthorized: false } : undefined,
     });
   }
 
   public async initialize(): Promise<void> {
     try {
-      const schemaPath = path.join(__dirname, 'schema.sql');
-      if (fs.existsSync(schemaPath)) {
+      const candidates = [
+        path.resolve(process.cwd(), 'src/db/schema.sql'),
+        path.resolve(__dirname, 'schema.sql'),
+        path.resolve(process.cwd(), 'dist/src/db/schema.sql'),
+      ];
+      const schemaPath = candidates.find((p) => fs.existsSync(p));
+      if (schemaPath) {
         const sql = fs.readFileSync(schemaPath, 'utf8');
         await this.pool.query(sql);
-        rootLogger.info('Postgres schema verified and initialized successfully');
+        rootLogger.info('Postgres schema verified and initialized successfully on Neon');
       }
     } catch (err) {
-      rootLogger.warn('Could not auto-apply schema.sql on Postgres (might already exist):', err);
+      rootLogger.warn('Could not auto-apply schema.sql on Postgres (tables might already exist):', err);
     }
   }
 

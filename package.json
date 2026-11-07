@@ -24,6 +24,8 @@
   "author": "Appointly Team",
   "license": "MIT",
   "dependencies": {
+    "@neon/config": "^1.13.0",
+    "@neon/env": "^2.1.0",
     "dotenv": "^16.4.7",
     "pg": "^8.13.1",
     "zod": "^3.24.1"

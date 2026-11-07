@@ -32,3 +32,4 @@ Non-negotiable Rule 5 mandates: "Every external call has a timeout, bounded retr
 ## Consequences
 - **Positive**: Patients never experience silent drops or frozen calls; every technical glitch produces an actionable clinic reception callback.
 - **Negative**: Adds small latency overhead when retrying failing endpoints (up to ~2.5s total backoff delay before triggering fallback).
+

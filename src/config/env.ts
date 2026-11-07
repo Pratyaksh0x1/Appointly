@@ -11,7 +11,11 @@ const envSchema = z.object({
 
   // Database
   DATABASE_URL: z.string().default('postgres://postgres:postgres@localhost:5432/appointly'),
-  USE_IN_MEMORY_DB: z.string().default('true').transform((val) => val === 'true'),
+  DATABASE_URL_UNPOOLED: z.string().optional(),
+  USE_IN_MEMORY_DB: z.string().default('false').transform((val) => val === 'true'),
+  NEON_BRANCH: z.string().optional(),
+  NEON_BRANCH_ID: z.string().optional(),
+  NEON_FUNCTION_HOST_SUFFIX: z.string().optional(),
 
   // Gnani Speech APIs
   GNANI_API_KEY: z.string().min(1, 'GNANI_API_KEY must be provided (or use mock in test/dev)'),
