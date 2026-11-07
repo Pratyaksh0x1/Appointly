@@ -9,6 +9,35 @@ Appointly is an empathetic, multilingual voice assistant designed for small clin
 
 ---
 
+## Phase 2: Database and Booking Core Highlights
+
+- **8 Relational Tables on PostgreSQL (Drizzle ORM & SQL Migrations)**:
+  - `doctors`: Doctor roster, specialty, IST working hours (`09:00`-`18:00`), active days.
+  - `appointment_types`: Visit types (`general_consultation` 30m, `follow_up` 15m, `comprehensive_checkup` 45m).
+  - `patients`: Patient directory with encrypted/masked phone numbers (`+91 ******3210`).
+  - `appointments`: Confirmed appointments with UTC storage, partial unique index `uq_active_doctor_slot`, and idempotency keys.
+  - `slot_holds`: 2-minute auto-expiring temporary holds for active callers.
+  - `calls`: Telephony call logs with credit tracking and outcomes.
+  - `outbox`: Transactional outbox pattern for reliable async messaging.
+  - `callback_requests`: Graceful fallback tickets for receptionist follow-up.
+- **Zero Double-Booking Guarantee (PostgreSQL Partial Unique Index)**:
+  ```sql
+  CREATE UNIQUE INDEX uq_active_doctor_slot
+  ON appointments (doctor_id, slot_start)
+  WHERE status = 'CONFIRMED';
+  ```
+- **UTC Storage & Asia/Kolkata Display**: Stored in UTC (`TIMESTAMPTZ`) for universal consistency; converted and displayed in `Asia/Kolkata` (IST, UTC+05:30) for Hinglish speech generation and doctor OPD screens.
+- **Pure Slot Generator**: Fully deterministic, side-effect-free algorithm computing valid intervals from working hours, visit durations, confirmed appointments, and unexpired holds.
+- **5 Core Service Functions**:
+  - `checkSlots(doctorId, date, appointmentTypeId)`
+  - `holdSlot(input)` (2-minute auto-expiring hold)
+  - `bookAppointment(input)` (single transaction, requires idempotency key, releases hold, enforces unique constraint, logs to outbox)
+  - `cancelAppointment(appointmentId, reason)` (frees slot for new bookings)
+  - `rescheduleAppointment(appointmentId, newDate, newTime)` (atomic move to new slot)
+- **High Concurrency Tested**: Verified by a concurrency test firing **50 simultaneous bookings** against Neon for the same slot: **exactly 1 succeeds, exactly 49 are safely rejected with `SLOT_ALREADY_BOOKED`**.
+
+---
+
 ## Architecture Overview
 
 For the detailed Mermaid architecture diagram and Master Context data flow, see [ARCHITECTURE.md](ARCHITECTURE.md).
@@ -41,7 +70,7 @@ appointly/
 │   └── dashboard/            # Minimalist Doctor Dashboard (Live SSE, OPD Roster, Simulator)
 ├── packages/
 │   └── shared/               # Shared domain types, Zod validation schemas & clinic constants
-├── docs/adr/                 # Architecture Decision Records (ADR-001 to ADR-005)
+├── docs/adr/                 # Architecture Decision Records (ADR-001 to ADR-006)
 ├── .github/workflows/ci.yml  # GitHub Actions CI (lint, typecheck, test, audit, gitleaks)
 ├── Makefile                  # Developer workflow automation
 ├── neon.ts                   # Neon project configuration & branch policy
@@ -74,6 +103,7 @@ Fill in your configuration or use the provisioned Neon connection:
 ```ini
 PORT=3000
 DATABASE_URL="postgresql://neondb_owner:...@ep-little-credit-bdwt1fpl-pooler.c-8.us-east-2.aws.neon.tech/neondb?sslmode=require"
+DATABASE_URL_UNPOOLED="postgresql://neondb_owner:...@ep-little-credit-bdwt1fpl.c-8.us-east-2.aws.neon.tech/neondb?sslmode=require"
 GNANI_API_KEY=your_gnani_api_key_here
 EVON_API_KEY=your_evon_api_key_here
 USE_MOCK_SERVICES=true
@@ -88,11 +118,12 @@ npm run typecheck
 # Code formatting and linting
 npm run lint
 
-# Run all 34 Vitest unit tests (including secret redaction & concurrency tests)
+# Run all 57 Vitest unit & concurrency tests
 npm test
 
-# Run end-to-end integration against Neon PostgreSQL
-npm run test-e2e
+# Run database migration & seed on Neon
+npm run migrate
+npx tsx scripts/seed.ts
 ```
 
 ### 4. Start the Development Server

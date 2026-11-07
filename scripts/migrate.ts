@@ -11,7 +11,7 @@ export async function runMigration() {
     throw new Error('DATABASE_URL or DATABASE_URL_UNPOOLED is missing in environment');
   }
 
-  console.log('Connecting to Neon PostgreSQL...');
+  console.log('Connecting to Neon PostgreSQL for migration...');
   const client = new pg.Client({
     connectionString: url,
     ssl: { rejectUnauthorized: false },
@@ -20,23 +20,33 @@ export async function runMigration() {
   await client.connect();
   console.log('Connected to Neon successfully!');
 
-  const schemaPath = path.resolve('src/db/schema.sql');
-  const sql = fs.readFileSync(schemaPath, 'utf8');
-  console.log('Applying schema.sql to Neon...');
-  await client.query(sql);
-  console.log('Schema applied successfully.');
+  // Look for migration SQL in apps/api/src/db/migrations/
+  const migrationPath = path.resolve('apps/api/src/db/migrations/0001_phase2_booking_core.sql');
+  const sql = fs.readFileSync(migrationPath, 'utf8');
 
-  const res = await client.query('SELECT count(*) as count FROM doctors');
-  console.log(`Verified doctors in database: ${res.rows[0].count} doctors loaded.`);
+  console.log('Applying 0001_phase2_booking_core.sql to Neon...');
+  await client.query(sql);
+  console.log('Migration applied successfully.');
+
+  // Verify tables
+  const tableCheck = await client.query(`
+    SELECT table_name 
+    FROM information_schema.tables 
+    WHERE table_schema = 'public' 
+    ORDER BY table_name;
+  `);
+
+  const tables = tableCheck.rows.map((r) => r.table_name);
+  console.log('Public tables in Neon DB:', tables.join(', '));
 
   await client.end();
-  return res.rows[0].count;
+  return tables;
 }
 
 if (process.argv[1] && process.argv[1].includes('migrate.ts')) {
   runMigration()
-    .then(() => {
-      console.log('Migration script finished with success.');
+    .then((tables) => {
+      console.log(`Migration completed. Total tables verified: ${tables.length}`);
       process.exit(0);
     })
     .catch((err) => {

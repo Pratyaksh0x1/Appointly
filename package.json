@@ -12,7 +12,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "tsc --noEmit",
+    "lint": "npm run typecheck && npm run format:check",
     "format": "prettier --write \"**/*.{ts,json,md,html}\"",
     "format:check": "prettier --check \"**/*.{ts,json,md,html}\"",
     "dev": "npm run dev --workspace=@appointly/api",
@@ -36,9 +36,13 @@
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@types/pg": "^8.11.10",
+    "drizzle-kit": "^0.31.11",
     "prettier": "^3.4.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.4"
   }
 }
