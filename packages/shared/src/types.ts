@@ -148,6 +148,7 @@ export interface BookingRequestInput {
   idempotencyKey: string;
   appointmentTypeId?: string;
   holdToken?: string;
+  slotStart?: Date;
 }
 
 export interface HoldSlotInput {
@@ -156,6 +157,7 @@ export interface HoldSlotInput {
   startTime: string; // HH:mm in Asia/Kolkata
   patientPhone: string;
   appointmentTypeId?: string;
+  slotStart?: Date;
 }
 
 export interface HoldSlotResult {

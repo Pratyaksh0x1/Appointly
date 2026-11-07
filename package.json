@@ -20,6 +20,7 @@
     "migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
     "smoke:voice": "tsx scripts/smoke-voice-pipeline.ts",
+    "chat:cli": "tsx scripts/cli-chat.ts",
     "audit": "npm audit --audit-level=high"
   },
   "keywords": [

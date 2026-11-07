@@ -21,7 +21,7 @@ const EMERGENCY_PATTERNS: { category: string; regex: RegExp }[] = [
   {
     category: 'BREATHING_DIFFICULTY',
     regex:
-      /(saans\s*(lene\s*m[eai]n?\s*takleef|phool\s*rahi|ruk\s*rahi)|can['’]?t\s*breathe|shortness\s*of\s*breath|suffocat(ing|ion)|asphyxia?)/i,
+      /(saans\s*(nahi\s*aa\s*rahi|lene\s*m[eai]n?\s*(takleef|dikkat)|phool\s*rahi|ruk\s*rahi)|can['’]?t\s*breathe|shortness\s*of\s*breath|suffocat(ing|ion)|asphyxia?)/i,
   },
   {
     category: 'UNCONSCIOUSNESS_COLLAPSE',
@@ -29,8 +29,7 @@ const EMERGENCY_PATTERNS: { category: string; regex: RegExp }[] = [
   },
   {
     category: 'SEVERE_BLEEDING_TRAUMA',
-    regex:
-      /(severe\s*bleeding|bahut\s*khoon\s*beh|bleeding\s*heavily|head\s*injury|accident|artery)/i,
+    regex: /(severe\s*bleeding|bahut\s*khoon|bleeding\s*heavily|head\s*injury|accident|artery)/i,
   },
   {
     category: 'STROKE_NEUROLOGICAL',

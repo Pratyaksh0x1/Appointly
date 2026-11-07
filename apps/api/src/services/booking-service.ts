@@ -37,6 +37,7 @@ import {
   HoldInterval,
 } from './slot-generator.js';
 import { maskPhone, rootLogger } from '../logger/logger.js';
+import { getEnv } from '../config/env.js';
 
 export interface CheckSlotsResult {
   doctor: Doctor;
@@ -88,6 +89,11 @@ export class BookingCoreService {
     const doc = this.mapDoctor(docRes.rows[0]);
     this.doctorCache.set(doctorId, { doctor: doc, expiry: now + 300000 }); // 5 min TTL
     return doc;
+  }
+
+  public async getAllDoctors(): Promise<Doctor[]> {
+    const docRes = await this.pool.query('SELECT * FROM doctors ORDER BY name ASC');
+    return docRes.rows.map((row) => this.mapDoctor(row));
   }
 
   public async updateDoctorSchedule(
@@ -286,11 +292,15 @@ export class BookingCoreService {
       }
     }
 
-    const slotStartUtc = kolkataToUtc(input.date, input.startTime);
+    const effectiveDate =
+      input.date || (input.slotStart ? formatKolkata(input.slotStart).dateStr : '');
+    const effectiveTime =
+      input.startTime || (input.slotStart ? formatKolkata(input.slotStart).timeStr : '');
+    const slotStartUtc = input.slotStart || kolkataToUtc(effectiveDate, effectiveTime);
     const slotEndUtc = addMinutes(slotStartUtc, durationMin);
 
     // Validate doctor working days
-    const dayOfWeek = getDayOfWeekInKolkata(input.date);
+    const dayOfWeek = getDayOfWeekInKolkata(effectiveDate);
     const isWorkingDay = doctor.activeDays.some(
       (day) => day.trim().toLowerCase() === dayOfWeek.trim().toLowerCase()
     );
@@ -465,11 +475,15 @@ export class BookingCoreService {
       const apptType = await this.getAppointmentType(apptTypeId);
       const durationMin = apptType?.durationMin || doctor.durationMinutes || 30;
 
-      const slotStartUtc = kolkataToUtc(input.date, input.startTime);
+      const effectiveDate =
+        input.date || (input.slotStart ? formatKolkata(input.slotStart).dateStr : '');
+      const effectiveTime =
+        input.startTime || (input.slotStart ? formatKolkata(input.slotStart).timeStr : '');
+      const slotStartUtc = input.slotStart || kolkataToUtc(effectiveDate, effectiveTime);
       const slotEndUtc = addMinutes(slotStartUtc, durationMin);
 
       // Validate doctor working days
-      const dayOfWeek = getDayOfWeekInKolkata(input.date);
+      const dayOfWeek = getDayOfWeekInKolkata(effectiveDate);
       const isWorkingDay = doctor.activeDays.some(
         (day) => day.trim().toLowerCase() === dayOfWeek.trim().toLowerCase()
       );
@@ -935,4 +949,18 @@ export class BookingCoreService {
       durationMinutes: Number(row.duration_min || row.duration_minutes || 30),
     };
   }
+}
+
+let sharedBookingCoreService: BookingCoreService | null = null;
+
+export function getBookingCoreService(): BookingCoreService {
+  if (!sharedBookingCoreService) {
+    const env = getEnv();
+    sharedBookingCoreService = new BookingCoreService(env.DATABASE_URL);
+  }
+  return sharedBookingCoreService;
+}
+
+export function setBookingCoreServiceForTesting(service: BookingCoreService | null): void {
+  sharedBookingCoreService = service;
 }
