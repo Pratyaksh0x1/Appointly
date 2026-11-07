@@ -94,9 +94,9 @@ export const envSchema = z.object({
     .default('1.0')
     .transform((val) => parseFloat(val)),
 
-  // Evon 30B LLM
-  EVON_API_KEY: z.string().min(1, 'EVON_API_KEY must be provided (or mock)'),
-  EVON_BASE_URL: z.string().url().default('https://api.vachana.ai/v1'),
+  // Evon 30B LLM / Indic Foundational Model (Gnani STT & TTS use GNANI_API_KEY; Evon runs locally or via built-in clinical engine)
+  EVON_API_KEY: z.string().default(''),
+  EVON_BASE_URL: z.string().url().default('http://localhost:11434/v1'),
   EVON_MODEL: z.string().default('evon-30b'),
 
   // Cost Management

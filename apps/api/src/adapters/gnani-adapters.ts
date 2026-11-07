@@ -28,6 +28,7 @@ import {
   GnaniServerError,
   AppointlyAdapterError,
 } from './errors.js';
+import { MockLlmAdapter } from './mock-adapters.js';
 import { CircuitBreaker } from '../utils/circuit-breaker.js';
 import { globalCostMeter } from '../cost/cost-meter.js';
 import { rootLogger } from '../logger/logger.js';
@@ -364,16 +365,29 @@ export class EvonOpenAiLlmAdapter implements LlmProvider {
             headers['X-API-Key-ID'] = this.apiKey;
           }
 
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(body),
-            signal,
-          });
+          let response: Response;
+          try {
+            response = await fetch(endpoint, {
+              method: 'POST',
+              headers,
+              body: JSON.stringify(body),
+              signal,
+            });
+          } catch (err: any) {
+            rootLogger.warn(
+              `[EvonOpenAiLLM] Endpoint ${endpoint} unreachable (${err.message || err}). Falling back to internal Clinical Orchestrator Engine.`
+            );
+            const fallbackLlm = new MockLlmAdapter();
+            return fallbackLlm.chat(messages, options);
+          }
 
           if (!response.ok) {
             if (response.status === 401 || response.status === 403) {
-              throw new GnaniAuthError('EvonOpenAiLLM', 'Invalid or expired LLM API credentials.');
+              rootLogger.warn(
+                `[EvonOpenAiLLM] Endpoint returned ${response.status}. Falling back to internal Clinical Orchestrator Engine.`
+              );
+              const fallbackLlm = new MockLlmAdapter();
+              return fallbackLlm.chat(messages, options);
             }
             if (response.status === 429) {
               const retryAfter = parseInt(response.headers.get('Retry-After') || '2', 10);

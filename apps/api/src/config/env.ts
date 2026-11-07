@@ -47,7 +47,7 @@ export function getEnv(): EnvConfig {
   if (!cachedEnv) {
     const fallbackEnv = { ...process.env };
     if (!fallbackEnv.GNANI_API_KEY) fallbackEnv.GNANI_API_KEY = 'mock_gnani_key';
-    if (!fallbackEnv.EVON_API_KEY) fallbackEnv.EVON_API_KEY = 'mock_evon_key';
+    if (!fallbackEnv.EVON_API_KEY) fallbackEnv.EVON_API_KEY = '';
     cachedEnv = validateEnv(fallbackEnv);
   }
   return cachedEnv;
