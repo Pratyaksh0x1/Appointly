@@ -20,6 +20,14 @@ import { createVoiceSessionToken } from './voice/session-manager.js';
 import { globalLatencyCollector } from './voice/timing-metrics.js';
 import { initAudioCache } from './voice/audio-cache.js';
 import { setupVoiceWebSocketServer } from './voice/ws-pipeline.js';
+import {
+  signDoctorToken,
+  verifyDoctorToken,
+  verifyGoogleCredential,
+  requireDoctorAuth,
+  CLINIC_DOCTOR_ROSTER,
+} from './auth/jwt-auth.js';
+import { emitOutboxEvent, startOutboxRelay, stopOutboxRelay } from './db/outbox-relay.js';
 
 let isShuttingDown = false;
 const sseClients = new Set<http.ServerResponse>();
@@ -130,7 +138,7 @@ async function handleToolExecution(
     });
 
     if (bookingResult.success && bookingResult.appointment) {
-      broadcastDashboardEvent('new_appointment', bookingResult.appointment);
+      await emitOutboxEvent('new_appointment', bookingResult.appointment as any);
       return { result: bookingResult, isBookingSuccess: true };
     }
 
@@ -230,9 +238,69 @@ export function createServer() {
         return;
       }
 
-      // 4b. Doctor Schedule Configuration (Doctor decides consultation timing e.g. 17:00 - 22:00)
+      // 4-AUTH. Authentication Endpoints for Doctor Dashboard
+      if (req.method === 'POST' && pathname === '/api/auth/google') {
+        let body = '';
+        req.on('data', (c) => (body += c));
+        req.on('end', async () => {
+          try {
+            const { credential } = JSON.parse(body || '{}');
+            const doctorUser = await verifyGoogleCredential(credential);
+            const token = signDoctorToken(doctorUser);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, token, doctor: doctorUser }));
+          } catch (err: any) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(
+              JSON.stringify({
+                error: 'GOOGLE_AUTH_FAILED',
+                message: String(err.message || err),
+              })
+            );
+          }
+        });
+        return;
+      }
+
+      if (req.method === 'POST' && pathname === '/api/auth/dev-login') {
+        let body = '';
+        req.on('data', (c) => (body += c));
+        req.on('end', () => {
+          try {
+            const { doctorId } = JSON.parse(body || '{}');
+            const targetId = doctorId || 'dr_sharma';
+            const doctorUser = CLINIC_DOCTOR_ROSTER[targetId] || CLINIC_DOCTOR_ROSTER['dr_sharma'];
+            const token = signDoctorToken(doctorUser);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, token, doctor: doctorUser }));
+          } catch (err: any) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'DEV_LOGIN_FAILED', message: String(err) }));
+          }
+        });
+        return;
+      }
+
+      if (req.method === 'GET' && pathname === '/api/auth/me') {
+        const doctor = requireDoctorAuth(req, res);
+        if (!doctor) return;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, doctor }));
+        return;
+      }
+
+      if (req.method === 'POST' && pathname === '/api/auth/logout') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, message: 'Logged out successfully' }));
+        return;
+      }
+
+      // 4b. Doctor Schedule Configuration (Protected: requires doctor auth)
       const scheduleMatch = pathname.match(/^\/api\/doctors\/([^/]+)\/schedule$/);
       if ((req.method === 'PUT' || req.method === 'POST') && scheduleMatch) {
+        const authDoctor = requireDoctorAuth(req, res);
+        if (!authDoctor) return;
+
         const doctorId = scheduleMatch[1];
         let body = '';
         req.on('data', (chunk) => (body += chunk));
@@ -253,8 +321,8 @@ export function createServer() {
 
             const updatedDoc = await db.updateDoctorSchedule(doctorId, parsed.data);
 
-            // Broadcast real-time schedule update event to connected dashboards
-            broadcastDashboardEvent('doctor_schedule_updated', {
+            // Broadcast real-time schedule update event to connected dashboards via outbox
+            await emitOutboxEvent('doctor_schedule_updated', {
               doctorId,
               doctor: updatedDoc,
               timestamp: new Date().toISOString(),
@@ -284,7 +352,7 @@ export function createServer() {
         return;
       }
 
-      // 5. Available slots
+      // 5. Available slots (Public: patient voice needs to query available times)
       if (req.method === 'GET' && pathname === '/api/slots') {
         const doctorId = parsedUrl.searchParams.get('doctorId') || 'dr_sharma';
         const date = parsedUrl.searchParams.get('date') || new Date().toISOString().slice(0, 10);
@@ -294,8 +362,11 @@ export function createServer() {
         return;
       }
 
-      // 6. Appointments listing
+      // 6. Appointments listing (Protected: requires doctor auth)
       if (req.method === 'GET' && pathname === '/api/appointments') {
+        const authDoctor = requireDoctorAuth(req, res);
+        if (!authDoctor) return;
+
         const doctorId = parsedUrl.searchParams.get('doctorId') || undefined;
         const date = parsedUrl.searchParams.get('date') || undefined;
         const appointments = await db.getAppointments(doctorId, date);
@@ -304,11 +375,126 @@ export function createServer() {
         return;
       }
 
-      // 7. Callback requests
+      // 6b. Reschedule Appointment (Protected: requires doctor auth)
+      const rescheduleMatch = pathname.match(/^\/api\/appointments\/([^/]+)\/reschedule$/);
+      if (req.method === 'PUT' && rescheduleMatch) {
+        const authDoctor = requireDoctorAuth(req, res);
+        if (!authDoctor) return;
+
+        const appointmentId = rescheduleMatch[1];
+        let body = '';
+        req.on('data', (c) => (body += c));
+        req.on('end', async () => {
+          try {
+            const { newDate, newStartTime } = JSON.parse(body || '{}');
+            if (!newDate || !newStartTime) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(
+                JSON.stringify({
+                  error: 'MISSING_DATA',
+                  message: 'newDate and newStartTime are required.',
+                })
+              );
+              return;
+            }
+
+            const result = await db.rescheduleAppointment(appointmentId, newDate, newStartTime);
+            if (result.success && result.appointment) {
+              await emitOutboxEvent('appointment_rescheduled', result.appointment as any);
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify(result));
+            } else {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify(result));
+            }
+          } catch (err: any) {
+            rootLogger.error('Error rescheduling appointment:', err);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: String(err) }));
+          }
+        });
+        return;
+      }
+
+      // 6c. Cancel Appointment (Protected: requires doctor auth)
+      const cancelMatch = pathname.match(/^\/api\/appointments\/([^/]+)\/cancel$/);
+      if (req.method === 'PUT' && cancelMatch) {
+        const authDoctor = requireDoctorAuth(req, res);
+        if (!authDoctor) return;
+
+        const appointmentId = cancelMatch[1];
+        let body = '';
+        req.on('data', (c) => (body += c));
+        req.on('end', async () => {
+          try {
+            const { reason } = JSON.parse(body || '{}');
+            const result = await db.cancelAppointment(appointmentId, reason);
+            if (result.success) {
+              await emitOutboxEvent('appointment_cancelled', { appointmentId, reason });
+            }
+            res.writeHead(result.success ? 200 : 400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result));
+          } catch (err: any) {
+            rootLogger.error('Error cancelling appointment:', err);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: String(err) }));
+          }
+        });
+        return;
+      }
+
+      // 6d. Complete Appointment (Protected: requires doctor auth)
+      const completeMatch = pathname.match(/^\/api\/appointments\/([^/]+)\/complete$/);
+      if (req.method === 'PUT' && completeMatch) {
+        const authDoctor = requireDoctorAuth(req, res);
+        if (!authDoctor) return;
+
+        const appointmentId = completeMatch[1];
+        try {
+          const result = await db.completeAppointment(appointmentId);
+          if (result.success) {
+            await emitOutboxEvent('appointment_completed', { appointmentId });
+          }
+          res.writeHead(result.success ? 200 : 400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        } catch (err: any) {
+          rootLogger.error('Error completing appointment:', err);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
+        return;
+      }
+
+      // 7. Callback requests (Protected: requires doctor auth)
       if (req.method === 'GET' && pathname === '/api/callbacks') {
+        const authDoctor = requireDoctorAuth(req, res);
+        if (!authDoctor) return;
+
         const callbacks = await db.getCallbackRequests();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(callbacks));
+        return;
+      }
+
+      // 7b. Resolve Callback Request (Protected: requires doctor auth)
+      const resolveCallbackMatch = pathname.match(/^\/api\/callbacks\/([^/]+)\/resolve$/);
+      if (req.method === 'PUT' && resolveCallbackMatch) {
+        const authDoctor = requireDoctorAuth(req, res);
+        if (!authDoctor) return;
+
+        const callbackId = resolveCallbackMatch[1];
+        try {
+          const result = await db.resolveCallbackRequest(callbackId);
+          if (result.success) {
+            await emitOutboxEvent('callback_resolved', { callbackId });
+          }
+          res.writeHead(result.success ? 200 : 400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        } catch (err: any) {
+          rootLogger.error('Error resolving callback request:', err);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
         return;
       }
 
@@ -376,15 +562,18 @@ export function createServer() {
         }
       }
 
-      // 9. Server-Sent Events (SSE) for live Doctor Dashboard
+      // 9. Server-Sent Events (SSE) for live Doctor Dashboard (Protected: requires doctor auth)
       if (req.method === 'GET' && pathname === '/api/dashboard/stream') {
+        const authDoctor = requireDoctorAuth(req, res);
+        if (!authDoctor) return;
+
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           Connection: 'keep-alive',
         });
         res.write(
-          'event: connected\ndata: {"message": "Connected to Appointly real-time stream"}\n\n'
+          `event: connected\ndata: {"message": "Connected to Appointly real-time stream as ${authDoctor.name}"}\n\n`
         );
         sseClients.add(res);
 
@@ -408,11 +597,11 @@ export function createServer() {
             // NON-NEGOTIABLE RULE 4: Code-level deterministic emergency check
             const emergency = checkEmergency(userText);
             if (emergency.isEmergency) {
-              broadcastDashboardEvent('emergency_alert', {
+              await emitOutboxEvent('emergency_alert', {
                 callId,
                 patientPhoneMasked: patientPhone,
                 matchedKeywords: emergency.matchedKeywords,
-                timestamp: new Date(),
+                timestamp: new Date().toISOString(),
               });
 
               res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -534,7 +723,10 @@ export function createServer() {
       }
 
       // 11. Minimalist Doctor Dashboard Static Serving
-      if (req.method === 'GET' && (pathname === '/' || pathname === '/index.html')) {
+      if (
+        req.method === 'GET' &&
+        (pathname === '/' || pathname === '/index.html' || pathname === '/dashboard')
+      ) {
         const candidatePaths = [
           path.resolve(process.cwd(), 'apps/dashboard/index.html'),
           path.resolve(process.cwd(), 'public/index.html'),
@@ -591,6 +783,7 @@ export async function startApp() {
 
   await db.initialize();
   await initAudioCache();
+  startOutboxRelay(1000);
   const doctors = await db.getDoctors();
   rootLogger.info(`Connected to database. Loaded ${doctors.length} clinic doctors.`, {
     doctorsCount: doctors.length,
@@ -602,6 +795,7 @@ export async function startApp() {
   const shutdown = async (signal: string) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
+    stopOutboxRelay();
     rootLogger.info(`Received ${signal}. Initiating graceful shutdown...`);
 
     // Notify connected SSE clients

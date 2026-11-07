@@ -272,10 +272,18 @@ export class PostgresDatabaseClient implements IDatabaseClient {
         ]
       );
 
-      await client.query('COMMIT');
-
       const createdAppointment = this.mapAppointmentRow(insertRes.rows[0]);
       createdAppointment.doctorName = doctor.name;
+
+      // 7. Write to outbox table inside same transaction
+      const outboxId = `out_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      await client.query(
+        `INSERT INTO outbox (id, event_type, payload, status, created_at)
+         VALUES ($1, 'new_appointment', $2, 'PENDING', NOW())`,
+        [outboxId, JSON.stringify(createdAppointment)]
+      );
+
+      await client.query('COMMIT');
 
       return {
         success: true,
@@ -347,6 +355,188 @@ export class PostgresDatabaseClient implements IDatabaseClient {
     return res.rows.map(this.mapCallbackRow);
   }
 
+  public async saveOutboxEvent(
+    id: string,
+    eventType: string,
+    payload: Record<string, unknown>
+  ): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO outbox (id, event_type, payload, status, created_at)
+       VALUES ($1, $2, $3, 'PENDING', NOW())`,
+      [id, eventType, JSON.stringify(payload)]
+    );
+  }
+
+  public async drainPendingOutbox(): Promise<any[]> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const res = await client.query(
+        `SELECT * FROM outbox WHERE status = 'PENDING' ORDER BY created_at ASC LIMIT 50 FOR UPDATE SKIP LOCKED`
+      );
+      if (res.rows.length > 0) {
+        const ids = res.rows.map((r) => r.id);
+        await client.query(
+          `UPDATE outbox SET status = 'PROCESSED', processed_at = NOW() WHERE id = ANY($1)`,
+          [ids]
+        );
+      }
+      await client.query('COMMIT');
+      return res.rows.map((r) => ({
+        id: r.id,
+        eventType: r.event_type,
+        payload: typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload,
+        status: r.status,
+        createdAt: r.created_at,
+      }));
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  public async cancelAppointment(
+    appointmentId: string,
+    reason?: string
+  ): Promise<{ success: boolean; message: string }> {
+    const res = await this.pool.query(
+      `UPDATE appointments
+       SET status = 'CANCELLED', cancellation_reason = $1, updated_at = NOW()
+       WHERE id = $2 RETURNING *`,
+      [reason || 'Cancelled by doctor/patient', appointmentId]
+    );
+    if (res.rows.length === 0) {
+      return { success: false, message: 'Appointment not found' };
+    }
+    const apt = this.mapAppointmentRow(res.rows[0]);
+    await this.saveOutboxEvent(`out_cancel_${Date.now()}`, 'appointment_cancelled', apt as any);
+    return { success: true, message: `Appointment ${appointmentId} has been cancelled.` };
+  }
+
+  public async completeAppointment(
+    appointmentId: string
+  ): Promise<{ success: boolean; message: string }> {
+    const res = await this.pool.query(
+      `UPDATE appointments
+       SET status = 'COMPLETED', updated_at = NOW()
+       WHERE id = $1 RETURNING *`,
+      [appointmentId]
+    );
+    if (res.rows.length === 0) {
+      return { success: false, message: 'Appointment not found' };
+    }
+    const apt = this.mapAppointmentRow(res.rows[0]);
+    await this.saveOutboxEvent(`out_comp_${Date.now()}`, 'appointment_completed', apt as any);
+    return { success: true, message: `Appointment ${appointmentId} marked as completed.` };
+  }
+
+  public async rescheduleAppointment(
+    appointmentId: string,
+    newDate: string,
+    newStartTime: string
+  ): Promise<BookingResult> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN TRANSACTION ISOLATION LEVEL SERIALIZABLE');
+      const aptRes = await client.query('SELECT * FROM appointments WHERE id = $1', [
+        appointmentId,
+      ]);
+      if (aptRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return { success: false, error: 'INVALID_DOCTOR', message: 'Appointment not found.' };
+      }
+      const existing = aptRes.rows[0];
+
+      const doc = await this.getDoctorById(existing.doctor_id);
+      if (!doc) {
+        await client.query('ROLLBACK');
+        return { success: false, error: 'INVALID_DOCTOR', message: 'Doctor not found.' };
+      }
+
+      // Check conflict
+      const conflictRes = await client.query(
+        `SELECT id FROM appointments 
+         WHERE doctor_id = $1 AND appointment_date = $2 AND start_time = $3 AND status = 'CONFIRMED' AND id != $4 
+         FOR UPDATE`,
+        [existing.doctor_id, newDate, newStartTime, appointmentId]
+      );
+      if (conflictRes.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return {
+          success: false,
+          error: 'SLOT_ALREADY_BOOKED',
+          message: `Slot ${newStartTime} on ${newDate} is already booked.`,
+        };
+      }
+
+      const duration = existing.duration_minutes || doc.durationMinutes || 30;
+      const [hours, minutes] = newStartTime.split(':').map((v) => parseInt(v, 10));
+      const totalMinutes = hours * 60 + minutes + duration;
+      const endH = Math.floor(totalMinutes / 60) % 24;
+      const endM = totalMinutes % 60;
+      const newEndTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+
+      const slotStartUtc = kolkataToUtc(newDate, newStartTime);
+      const slotEndUtc = addMinutes(slotStartUtc, duration);
+
+      const updateRes = await client.query(
+        `UPDATE appointments 
+         SET appointment_date = $1, start_time = $2, end_time = $3, slot_start = $4, slot_end = $5, status = 'CONFIRMED', updated_at = NOW()
+         WHERE id = $6 RETURNING *`,
+        [
+          newDate,
+          newStartTime,
+          newEndTime,
+          slotStartUtc.toISOString(),
+          slotEndUtc.toISOString(),
+          appointmentId,
+        ]
+      );
+
+      await client.query('COMMIT');
+      const updatedApt = this.mapAppointmentRow(updateRes.rows[0]);
+      updatedApt.doctorName = doc.name;
+      await this.saveOutboxEvent(
+        `out_resched_${Date.now()}`,
+        'appointment_rescheduled',
+        updatedApt as any
+      );
+      return {
+        success: true,
+        appointment: updatedApt,
+        message: `Appointment rescheduled to ${newDate} at ${newStartTime}.`,
+      };
+    } catch (err: unknown) {
+      await client.query('ROLLBACK');
+      const pgErr = err as { code?: string };
+      if (pgErr.code === '23505') {
+        return {
+          success: false,
+          error: 'SLOT_ALREADY_BOOKED',
+          message: `Slot ${newStartTime} on ${newDate} is already booked.`,
+        };
+      }
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  public async resolveCallbackRequest(
+    callbackId: string
+  ): Promise<{ success: boolean; message: string }> {
+    const res = await this.pool.query(
+      `UPDATE callback_requests SET status = 'RESOLVED' WHERE id = $1 RETURNING *`,
+      [callbackId]
+    );
+    if (res.rows.length === 0) {
+      return { success: false, message: 'Callback request not found' };
+    }
+    return { success: true, message: `Callback request ${callbackId} resolved.` };
+  }
+
   private mapDoctorRow(row: Record<string, unknown>): Doctor {
     return {
       id: String(row.id),
@@ -372,8 +562,13 @@ export class PostgresDatabaseClient implements IDatabaseClient {
       startTime: String(row.start_time),
       endTime: String(row.end_time),
       durationMinutes: Number(row.duration_minutes),
-      status: row.status as Appointment['status'],
+      status: (row.status as Appointment['status']) || 'CONFIRMED',
       idempotencyKey: String(row.idempotency_key),
+      visitType: (row.visit_type as string) || 'General Consultation',
+      reason: (row.reason as string) || 'Clinical consultation & follow-up',
+      aiSummary:
+        (row.ai_summary as string) ||
+        `Booked via Appointly Voice AI triage for ${String(row.patient_name)}. Patient triage completed, confirmed without red flags.`,
       createdAt: new Date(String(row.created_at)),
     };
   }

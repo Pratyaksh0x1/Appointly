@@ -2,7 +2,7 @@
  * Core Domain Types for Appointly
  */
 
-export type AppointmentStatus = 'CONFIRMED' | 'CANCELLED' | 'COMPLETED';
+export type AppointmentStatus = 'CONFIRMED' | 'CANCELLED' | 'COMPLETED' | 'RESCHEDULED';
 export type CallbackStatus = 'PENDING' | 'RESOLVED';
 export type AiServiceType = 'PRISMA_STT' | 'TIMBRE_TTS' | 'EVON_LLM';
 
@@ -30,6 +30,9 @@ export interface Appointment {
   durationMinutes: number;
   status: AppointmentStatus;
   idempotencyKey: string;
+  visitType?: string;
+  reason?: string;
+  aiSummary?: string;
   createdAt: Date;
 }
 

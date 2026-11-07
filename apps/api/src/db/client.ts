@@ -46,4 +46,18 @@ export interface IDatabaseClient {
   ): Promise<CallbackRequest>;
   getAppointments(doctorId?: string, date?: string): Promise<Appointment[]>;
   getCallbackRequests(): Promise<CallbackRequest[]>;
+
+  cancelAppointment(
+    appointmentId: string,
+    reason?: string
+  ): Promise<{ success: boolean; message: string }>;
+  rescheduleAppointment(
+    appointmentId: string,
+    newDate: string,
+    newStartTime: string
+  ): Promise<BookingResult>;
+  completeAppointment(appointmentId: string): Promise<{ success: boolean; message: string }>;
+  resolveCallbackRequest(callbackId: string): Promise<{ success: boolean; message: string }>;
+  saveOutboxEvent?(id: string, eventType: string, payload: Record<string, unknown>): Promise<void>;
+  drainPendingOutbox?(): Promise<any[]>;
 }

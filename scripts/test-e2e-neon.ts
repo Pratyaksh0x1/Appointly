@@ -19,7 +19,8 @@ async function makeRequest(
   port: number,
   path: string,
   method = 'GET',
-  body?: unknown
+  body?: unknown,
+  token?: string
 ): Promise<any> {
   return new Promise((resolve, reject) => {
     const data = body ? JSON.stringify(body) : undefined;
@@ -32,6 +33,7 @@ async function makeRequest(
         headers: {
           'Content-Type': 'application/json',
           ...(data ? { 'Content-Length': Buffer.byteLength(data) } : {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
       },
       (res) => {
@@ -93,7 +95,12 @@ async function runE2ETest() {
     console.log('   ✅ GET /api/doctors Passed.\n');
 
     // Test 3: Available Slots for Dr. Sharma
-    const testDate = '2026-11-25';
+    const freshDate = new Date();
+    freshDate.setDate(freshDate.getDate() + 30 + Math.floor(Math.random() * 30));
+    if (freshDate.getDay() === 0) freshDate.setDate(freshDate.getDate() + 1);
+    if (freshDate.getDay() === 6) freshDate.setDate(freshDate.getDate() + 2);
+    const testDate = freshDate.toISOString().slice(0, 10);
+
     console.log(`5. Testing GET /api/slots for Dr. Sharma on ${testDate}...`);
     const slotsRes = await makeRequest(testPort, `/api/slots?doctorId=dr_sharma&date=${testDate}`);
     console.log('   Available slots:', slotsRes.data.availableSlots.join(', '));
@@ -103,9 +110,9 @@ async function runE2ETest() {
     console.log('   ✅ GET /api/slots Passed.\n');
 
     // Test 4: Booking an Appointment via Transaction on Neon
-    console.log('6. Testing Live Booking via POST /api/chat...');
+    console.log(`6. Testing Live Booking via POST /api/chat on ${testDate}...`);
     const chatBooking = await makeRequest(testPort, '/api/chat', 'POST', {
-      text: 'Mujhe Dr. Sharma ke sath kal 09:30 par appointment book karna hai, mera naam Aarav Mehta hai',
+      text: `Mujhe Dr. Sharma ke sath ${testDate} ko 09:30 par appointment book karna hai, mera naam Aarav Mehta hai`,
       callId: `neon_e2e_${Date.now()}`,
       phone: '9876543210',
     });
@@ -117,13 +124,9 @@ async function runE2ETest() {
 
     // Test 5: NON-NEGOTIABLE RULE 2 - Double Booking Prevention on Neon
     console.log('7. Testing Double-Booking Prevention on Neon (Booking same slot again)...');
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const bookedDate = tomorrow.toISOString().slice(0, 10);
-
     const duplicateAttempt = await db.bookAppointment({
       doctorId: 'dr_sharma',
-      date: bookedDate,
+      date: testDate,
       startTime: '09:30',
       patientName: 'Second Patient',
       patientPhone: '9123456789',
@@ -139,9 +142,24 @@ async function runE2ETest() {
       '   ✅ Double-Booking Strictly Prevented on Neon (Zero Double-Booking Verified).\n'
     );
 
-    // Test 6: Verify Appointments on Neon
-    console.log('8. Testing GET /api/appointments...');
-    const appointmentsRes = await makeRequest(testPort, '/api/appointments');
+    // Test 6: Verify Authenticated Appointments on Neon
+    console.log('8. Testing Doctor Auth & GET /api/appointments...');
+    const loginRes = await makeRequest(testPort, '/api/auth/dev-login', 'POST', {
+      doctorId: 'dr_sharma',
+    });
+    if (!loginRes.data.success || !loginRes.data.token) {
+      throw new Error('Doctor login failed');
+    }
+    const doctorToken = loginRes.data.token;
+    console.log(`   ✅ Logged in as ${loginRes.data.doctor.name} (JWT token acquired)`);
+
+    const appointmentsRes = await makeRequest(
+      testPort,
+      '/api/appointments',
+      'GET',
+      undefined,
+      doctorToken
+    );
     console.log(`   Found ${appointmentsRes.data.length} total appointments in Neon.`);
     console.log('   Latest Appointment:', {
       patient: appointmentsRes.data[0].patientName,

@@ -3,6 +3,7 @@ import http from 'http';
 import { createServer } from '../src/index.js';
 import { getDatabaseClient, MemoryDatabaseClient } from '../src/db/index.js';
 import { BookingCoreService } from '../src/services/booking-service.js';
+import { signDoctorToken, CLINIC_DOCTOR_ROSTER } from '../src/auth/jwt-auth.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -56,6 +57,8 @@ describe('Doctor Dynamic Schedule Configuration & Agent Synchronization', () => 
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }, 30000);
 
+  const doctorToken = signDoctorToken(CLINIC_DOCTOR_ROSTER.dr_priya);
+
   const requestJson = (
     method: string,
     path: string,
@@ -70,6 +73,7 @@ describe('Doctor Dynamic Schedule Configuration & Agent Synchronization', () => 
           headers: {
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(payload),
+            Authorization: `Bearer ${doctorToken}`,
           },
         },
         (res) => {

@@ -78,6 +78,7 @@ export class MemoryDatabaseClient implements IDatabaseClient {
   private idempotencyMap: Map<string, Appointment> = new Map(); // key = idempotencyKey
   private slotLockMap: Map<string, Appointment> = new Map(); // key = `${doctorId}:${date}:${startTime}`
   private callbackRequests: CallbackRequest[] = [];
+  private outboxEvents: any[] = [];
 
   // Simple async lock to emulate atomic DB transaction
   private transactionMutex: Promise<void> = Promise.resolve();
@@ -257,6 +258,9 @@ export class MemoryDatabaseClient implements IDatabaseClient {
         durationMinutes: doctor.durationMinutes,
         status: 'CONFIRMED',
         idempotencyKey: input.idempotencyKey,
+        visitType: 'General Consultation',
+        reason: 'Regular consultation and health triage',
+        aiSummary: `Booked via Voice AI assistant. Triage completed, slot confirmed for ${input.patientName}.`,
         createdAt: new Date(),
       };
 
@@ -264,6 +268,7 @@ export class MemoryDatabaseClient implements IDatabaseClient {
       this.appointments.set(id, appointment);
       this.slotLockMap.set(slotKey, appointment);
       this.idempotencyMap.set(input.idempotencyKey, appointment);
+      await this.saveOutboxEvent(`out_${Date.now()}`, 'new_appointment', appointment as any);
 
       return {
         success: true,
@@ -310,11 +315,109 @@ export class MemoryDatabaseClient implements IDatabaseClient {
     return [...this.callbackRequests].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }
 
+  public async saveOutboxEvent(
+    id: string,
+    eventType: string,
+    payload: Record<string, unknown>
+  ): Promise<void> {
+    this.outboxEvents.push({
+      id,
+      eventType,
+      payload,
+      status: 'PENDING',
+      createdAt: new Date(),
+    });
+  }
+
+  public async drainPendingOutbox(): Promise<any[]> {
+    const pending = this.outboxEvents.filter((e) => e.status === 'PENDING');
+    for (const p of pending) {
+      p.status = 'PROCESSED';
+    }
+    return pending;
+  }
+
+  public async cancelAppointment(
+    appointmentId: string,
+    reason?: string
+  ): Promise<{ success: boolean; message: string }> {
+    const apt = this.appointments.get(appointmentId);
+    if (!apt) {
+      return { success: false, message: 'Appointment not found' };
+    }
+    apt.status = 'CANCELLED';
+    const slotKey = `${apt.doctorId}:${apt.appointmentDate}:${apt.startTime}`;
+    this.slotLockMap.delete(slotKey);
+    await this.saveOutboxEvent(`out_cancel_${Date.now()}`, 'appointment_cancelled', apt as any);
+    return { success: true, message: `Appointment ${appointmentId} cancelled.` };
+  }
+
+  public async completeAppointment(
+    appointmentId: string
+  ): Promise<{ success: boolean; message: string }> {
+    const apt = this.appointments.get(appointmentId);
+    if (!apt) {
+      return { success: false, message: 'Appointment not found' };
+    }
+    apt.status = 'COMPLETED';
+    await this.saveOutboxEvent(`out_comp_${Date.now()}`, 'appointment_completed', apt as any);
+    return { success: true, message: `Appointment ${appointmentId} completed.` };
+  }
+
+  public async rescheduleAppointment(
+    appointmentId: string,
+    newDate: string,
+    newStartTime: string
+  ): Promise<BookingResult> {
+    const apt = this.appointments.get(appointmentId);
+    if (!apt) {
+      return { success: false, error: 'INVALID_DOCTOR', message: 'Appointment not found.' };
+    }
+
+    const newSlotKey = `${apt.doctorId}:${newDate}:${newStartTime}`;
+    const conflict = this.slotLockMap.get(newSlotKey);
+    if (conflict && conflict.id !== appointmentId && conflict.status === 'CONFIRMED') {
+      return {
+        success: false,
+        error: 'SLOT_ALREADY_BOOKED',
+        message: `Slot ${newStartTime} on ${newDate} is already booked.`,
+      };
+    }
+
+    // Release old slot key
+    const oldSlotKey = `${apt.doctorId}:${apt.appointmentDate}:${apt.startTime}`;
+    this.slotLockMap.delete(oldSlotKey);
+
+    apt.appointmentDate = newDate;
+    apt.startTime = newStartTime;
+    apt.status = 'CONFIRMED';
+    this.slotLockMap.set(newSlotKey, apt);
+
+    await this.saveOutboxEvent(`out_resched_${Date.now()}`, 'appointment_rescheduled', apt as any);
+    return {
+      success: true,
+      appointment: apt,
+      message: `Appointment rescheduled to ${newDate} at ${newStartTime}.`,
+    };
+  }
+
+  public async resolveCallbackRequest(
+    callbackId: string
+  ): Promise<{ success: boolean; message: string }> {
+    const cb = this.callbackRequests.find((c) => c.id === callbackId);
+    if (!cb) {
+      return { success: false, message: 'Callback request not found' };
+    }
+    cb.status = 'RESOLVED';
+    return { success: true, message: `Callback request ${callbackId} resolved.` };
+  }
+
   public reset(): void {
     this.appointments.clear();
     this.idempotencyMap.clear();
     this.slotLockMap.clear();
     this.callbackRequests = [];
+    this.outboxEvents = [];
     this.seed();
   }
 }

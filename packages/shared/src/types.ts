@@ -56,6 +56,9 @@ export interface Appointment {
   status: AppointmentStatus;
   idempotencyKey: string;
   cancellationReason?: string;
+  visitType?: string;
+  reason?: string;
+  aiSummary?: string;
   createdAt: Date;
   updatedAt: Date;
   // Formatted display helpers
