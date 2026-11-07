@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Appointly - Doctor Dashboard & OPD Schedule</title>
+    <title>Appointly — Clinic AI Voice Receptionist & Doctor OPD Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -13,21 +13,22 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
       :root {
+        --primary: #4f46e5;
+        --primary-hover: #4338ca;
+        --primary-light: #e0e7ff;
+        --success: #10b981;
+        --success-light: #d1fae5;
+        --danger: #ef4444;
+        --danger-light: #fee2e2;
+        --warning: #f59e0b;
+        --warning-light: #fef3c7;
         --bg: #f8fafc;
         --card-bg: #ffffff;
         --border: #e2e8f0;
-        --text-main: #0f172a;
+        --text: #0f172a;
         --text-muted: #64748b;
-        --primary: #581c87;
-        --primary-light: #7e22ce;
-        --primary-subtle: #f3e8ff;
-        --accent: #10b981;
-        --danger: #ef4444;
-        --warning: #f59e0b;
-        --info: #3b82f6;
-        --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-        --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07);
-        --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+        --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+        --shadow-lg: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
       }
 
       * {
@@ -37,807 +38,319 @@
       }
 
       body {
-        font-family:
-          'Plus Jakarta Sans',
-          system-ui,
-          -apple-system,
-          sans-serif;
+        font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
         background-color: var(--bg);
-        color: var(--text-main);
+        color: var(--text);
         line-height: 1.5;
-        padding-bottom: 60px;
         min-height: 100vh;
       }
 
-      /* Emergency Banner */
-      #emergencyBanner {
+      /* View containers */
+      .app-view {
         display: none;
-        background: linear-gradient(90deg, #b91c1c 0%, #dc2626 50%, #b91c1c 100%);
-        color: #ffffff;
-        padding: 12px 24px;
-        position: sticky;
-        top: 0;
-        z-index: 100;
-        box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35);
-        animation: pulseRed 2s infinite;
+      }
+      .app-view.active {
+        display: block;
       }
 
-      @keyframes pulseRed {
-        0%,
-        100% {
-          opacity: 1;
-        }
-        50% {
-          opacity: 0.92;
-        }
-      }
-
-      .emergency-container {
-        max-width: 1360px;
-        margin: 0 auto;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 16px;
-        flex-wrap: wrap;
-      }
-
-      .emergency-title {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-weight: 700;
-        font-size: 0.95rem;
-        letter-spacing: 0.02em;
-      }
-
-      .emergency-msg {
-        font-size: 0.85rem;
-        opacity: 0.95;
-      }
-
-      .btn-ack {
-        background: #ffffff;
-        color: #b91c1c;
-        border: none;
-        padding: 6px 14px;
-        border-radius: 6px;
-        font-weight: 700;
-        font-size: 0.8rem;
-        cursor: pointer;
-        transition: transform 0.1s ease;
-      }
-
-      .btn-ack:hover {
-        transform: scale(1.04);
-      }
-
-      /* Header / Navbar */
-      header {
+      /* Navigation Bar */
+      .navbar {
         background: #ffffff;
         border-bottom: 1px solid var(--border);
+        padding: 14px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
         position: sticky;
         top: 0;
         z-index: 50;
-        padding: 12px 24px;
-        box-shadow: var(--shadow-sm);
       }
 
-      .nav-container {
-        max-width: 1360px;
-        margin: 0 auto;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 16px;
-      }
-
-      .brand {
+      .nav-brand {
         display: flex;
         align-items: center;
         gap: 12px;
         text-decoration: none;
+        color: inherit;
+        cursor: pointer;
       }
 
-      .brand-logo {
-        width: 44px;
-        height: 44px;
-        border-radius: 50%;
-        object-fit: cover;
-        box-shadow: var(--shadow-sm);
-        border: 2px solid var(--primary-subtle);
+      .brand-icon {
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.3rem;
+        font-weight: 800;
+        box-shadow: 0 4px 10px rgba(79, 70, 229, 0.3);
       }
 
       .brand-title {
-        font-size: 1.3rem;
+        font-size: 1.15rem;
         font-weight: 800;
-        color: var(--primary);
-        letter-spacing: -0.02em;
-        line-height: 1.1;
+        color: var(--text);
+        line-height: 1.2;
       }
 
       .brand-subtitle {
         font-size: 0.75rem;
         color: var(--text-muted);
-        font-weight: 500;
       }
 
       .nav-actions {
         display: flex;
         align-items: center;
-        gap: 14px;
-      }
-
-      .status-badge {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        background: var(--primary-subtle);
-        color: var(--primary);
-        padding: 6px 14px;
-        border-radius: 9999px;
-        font-size: 0.8rem;
-        font-weight: 600;
-      }
-
-      .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: var(--accent);
-        box-shadow: 0 0 8px var(--accent);
-      }
-
-      /* Doctor Profile Chip */
-      .doctor-chip {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 4px 12px 4px 6px;
-        background: #f1f5f9;
-        border-radius: 9999px;
-        border: 1px solid var(--border);
-        font-size: 0.8rem;
-      }
-
-      .doctor-chip-avatar {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        background: var(--primary);
-        color: #ffffff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 700;
-        font-size: 0.75rem;
-      }
-
-      .btn-logout {
-        background: none;
-        border: none;
-        color: var(--danger);
-        cursor: pointer;
-        font-size: 0.75rem;
-        font-weight: 600;
-        padding: 2px 6px;
-      }
-
-      .btn-logout:hover {
-        text-decoration: underline;
-      }
-
-      /* Layout */
-      main {
-        max-width: 1360px;
-        margin: 24px auto 0;
-        padding: 0 20px;
-      }
-
-      /* Metrics Grid */
-      .metrics-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-        gap: 16px;
-        margin-bottom: 24px;
-      }
-
-      .metric-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 18px 20px;
-        box-shadow: var(--shadow-sm);
-        position: relative;
-        overflow: hidden;
-      }
-
-      .metric-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 4px;
-        height: 100%;
-        background: var(--primary-light);
-      }
-
-      .metric-title {
-        font-size: 0.78rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        color: var(--text-muted);
-        letter-spacing: 0.05em;
-      }
-
-      .metric-value {
-        font-size: 1.85rem;
-        font-weight: 800;
-        color: var(--text-main);
-        margin: 4px 0 2px;
-        display: flex;
-        align-items: baseline;
-        gap: 6px;
-      }
-
-      .metric-meta {
-        font-size: 0.75rem;
-        color: var(--text-muted);
-      }
-
-      .credit-progress-bar {
-        width: 100%;
-        height: 6px;
-        background: #e2e8f0;
-        border-radius: 9999px;
-        margin-top: 8px;
-        overflow: hidden;
-      }
-
-      .credit-progress-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #10b981, #7e22ce);
-        width: 100%;
-        transition: width 0.3s ease;
-      }
-
-      /* Main Dashboard Content Layout */
-      .dashboard-layout {
-        display: grid;
-        grid-template-columns: 2fr 1.15fr;
-        gap: 24px;
-        align-items: start;
-      }
-
-      @media (max-width: 1080px) {
-        .dashboard-layout {
-          grid-template-columns: 1fr;
-        }
-      }
-
-      /* Tabs Navigation */
-      .tabs-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        border-bottom: 2px solid var(--border);
-        margin-bottom: 20px;
-        background: #ffffff;
-        border-radius: 10px 10px 0 0;
-        padding: 6px 12px 0;
-      }
-
-      .tab-btn {
-        background: transparent;
-        border: none;
-        padding: 10px 16px;
-        font-size: 0.88rem;
-        font-weight: 600;
-        color: var(--text-muted);
-        cursor: pointer;
-        position: relative;
-        transition: color 0.15s ease;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .tab-btn:hover {
-        color: var(--primary);
-      }
-
-      .tab-btn.active {
-        color: var(--primary);
-        font-weight: 700;
-      }
-
-      .tab-btn.active::after {
-        content: '';
-        position: absolute;
-        bottom: -2px;
-        left: 0;
-        width: 100%;
-        height: 3px;
-        background: var(--primary);
-        border-radius: 3px 3px 0 0;
-      }
-
-      .tab-badge {
-        background: var(--primary-subtle);
-        color: var(--primary);
-        padding: 2px 7px;
-        border-radius: 9999px;
-        font-size: 0.72rem;
-        font-weight: 700;
-      }
-
-      /* Panels */
-      .panel {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: var(--shadow-sm);
-        margin-bottom: 20px;
-      }
-
-      .panel-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 16px;
-        padding-bottom: 12px;
-        border-bottom: 1px solid var(--border);
-      }
-
-      .panel-title {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: var(--text-main);
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-
-      /* Filters Row */
-      .filters-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
         gap: 12px;
-        margin-bottom: 16px;
-        flex-wrap: wrap;
-      }
-
-      .filter-chips {
-        display: flex;
-        gap: 6px;
-        flex-wrap: wrap;
-      }
-
-      .chip {
-        background: var(--bg);
-        border: 1px solid var(--border);
-        color: var(--text-muted);
-        font-size: 0.75rem;
-        font-weight: 600;
-        padding: 5px 12px;
-        border-radius: 9999px;
-        cursor: pointer;
-        transition: all 0.15s ease;
-        user-select: none;
-      }
-
-      .chip:hover {
-        background: var(--primary-subtle);
-        color: var(--primary);
-        border-color: var(--primary-light);
-      }
-
-      .chip.active {
-        background: var(--primary);
-        color: #ffffff;
-        border-color: var(--primary);
-      }
-
-      /* Rich Appointment Card */
-      .appointments-list {
-        display: flex;
-        flex-direction: column;
-        gap: 14px;
-        max-height: 680px;
-        overflow-y: auto;
-        padding-right: 4px;
-      }
-
-      .appointment-card {
-        background: #ffffff;
-        border: 1px solid var(--border);
-        border-left: 5px solid var(--primary-light);
-        border-radius: 10px;
-        padding: 16px 18px;
-        box-shadow: var(--shadow-sm);
-        transition:
-          transform 0.15s ease,
-          box-shadow 0.15s ease;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-      }
-
-      .appointment-card:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-md);
-      }
-
-      .appointment-card.status-RESCHEDULED {
-        border-left-color: var(--warning);
-      }
-
-      .appointment-card.status-COMPLETED {
-        border-left-color: var(--accent);
-        opacity: 0.88;
-      }
-
-      .appointment-card.status-CANCELLED {
-        border-left-color: var(--danger);
-        opacity: 0.65;
-        background: #fdf2f2;
-      }
-
-      .apt-card-top {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 12px;
-      }
-
-      .apt-patient-info {
-        display: flex;
-        flex-direction: column;
-      }
-
-      .apt-patient-name {
-        font-size: 1.05rem;
-        font-weight: 700;
-        color: var(--text-main);
-      }
-
-      .apt-patient-phone {
-        font-size: 0.8rem;
-        color: var(--text-muted);
-        font-family: monospace;
-      }
-
-      .status-pill {
-        font-size: 0.72rem;
-        font-weight: 700;
-        padding: 4px 10px;
-        border-radius: 9999px;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-      }
-
-      .status-pill.CONFIRMED {
-        background: #ecfdf5;
-        color: #047857;
-        border: 1px solid #a7f3d0;
-      }
-
-      .status-pill.RESCHEDULED {
-        background: #fffbeb;
-        color: #b45309;
-        border: 1px solid #fde68a;
-      }
-
-      .status-pill.COMPLETED {
-        background: #eff6ff;
-        color: #1d4ed8;
-        border: 1px solid #bfdbfe;
-      }
-
-      .status-pill.CANCELLED {
-        background: #fef2f2;
-        color: #b91c1c;
-        border: 1px solid #fecaca;
-      }
-
-      .apt-card-meta-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-        gap: 8px 16px;
-        background: #f8fafc;
-        padding: 10px 14px;
-        border-radius: 8px;
-        font-size: 0.82rem;
-      }
-
-      .apt-meta-item {
-        display: flex;
-        flex-direction: column;
-      }
-
-      .apt-meta-label {
-        font-size: 0.7rem;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        font-weight: 600;
-      }
-
-      .apt-meta-value {
-        font-weight: 600;
-        color: var(--text-main);
-      }
-
-      .apt-ai-summary-box {
-        background: #faf5ff;
-        border: 1px dashed #d8b4fe;
-        border-radius: 8px;
-        padding: 8px 12px;
-        font-size: 0.78rem;
-        color: #581c87;
-        line-height: 1.4;
-      }
-
-      .apt-ai-summary-box strong {
-        font-weight: 700;
-      }
-
-      .apt-card-actions {
-        display: flex;
-        gap: 8px;
-        justify-content: flex-end;
-        align-items: center;
-        border-top: 1px solid #f1f5f9;
-        padding-top: 10px;
-      }
-
-      .btn-action {
-        background: #ffffff;
-        border: 1px solid var(--border);
-        color: var(--text-main);
-        padding: 5px 11px;
-        border-radius: 6px;
-        font-size: 0.78rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.15s ease;
-      }
-
-      .btn-action:hover {
-        background: #f1f5f9;
-      }
-
-      .btn-action.btn-complete {
-        background: #ecfdf5;
-        border-color: #a7f3d0;
-        color: #047857;
-      }
-
-      .btn-action.btn-complete:hover {
-        background: #d1fae5;
-      }
-
-      .btn-action.btn-reschedule {
-        background: #fffbeb;
-        border-color: #fde68a;
-        color: #b45309;
-      }
-
-      .btn-action.btn-reschedule:hover {
-        background: #fef3c7;
-      }
-
-      .btn-action.btn-cancel {
-        background: #fef2f2;
-        border-color: #fecaca;
-        color: #b91c1c;
-      }
-
-      .btn-action.btn-cancel:hover {
-        background: #fee2e2;
-      }
-
-      /* Calendar / Day OPD View */
-      .day-view-container {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-      }
-
-      .day-timeline-grid {
-        display: grid;
-        grid-template-columns: 80px 1fr;
-        gap: 10px;
-        background: #ffffff;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 16px;
-      }
-
-      .timeline-slot-row {
-        display: contents;
-      }
-
-      .timeline-time-label {
-        font-size: 0.78rem;
-        font-weight: 700;
-        color: var(--text-muted);
-        padding-top: 6px;
-        text-align: right;
-        padding-right: 12px;
-        border-right: 2px solid var(--border);
-      }
-
-      .timeline-slot-block {
-        border-radius: 8px;
-        padding: 8px 12px;
-        font-size: 0.8rem;
-        margin-bottom: 8px;
-        transition: transform 0.1s ease;
-      }
-
-      .timeline-slot-block.available {
-        background: #f0fdf4;
-        border: 1px dashed #86efac;
-        color: #166534;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-
-      .timeline-slot-block.booked {
-        background: #faf5ff;
-        border: 1px solid #d8b4fe;
-        color: #581c87;
-        font-weight: 600;
-        box-shadow: var(--shadow-sm);
-      }
-
-      .timeline-slot-block.closed {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        color: #94a3b8;
-        font-style: italic;
-      }
-
-      /* Callbacks List */
-      .callback-item {
-        background: #ffffff;
-        border: 1px solid var(--border);
-        border-left: 4px solid var(--warning);
-        border-radius: 8px;
-        padding: 12px 16px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 10px;
-      }
-
-      /* Voice AI Simulator Box */
-      .chat-box {
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        background: #f8fafc;
-        padding: 14px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        height: 250px;
-        overflow-y: auto;
-        font-size: 0.85rem;
-      }
-
-      .chat-message {
-        padding: 9px 13px;
-        border-radius: 8px;
-        max-width: 85%;
-        line-height: 1.4;
-      }
-
-      .chat-user {
-        align-self: flex-end;
-        background: var(--primary);
-        color: white;
-      }
-
-      .chat-bot {
-        align-self: flex-start;
-        background: white;
-        border: 1px solid var(--border);
-        color: var(--text-main);
-      }
-
-      .chat-input-row {
-        display: flex;
-        gap: 8px;
-        margin-top: 10px;
-      }
-
-      .chat-input {
-        flex: 1;
-        padding: 9px 12px;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        font-size: 0.85rem;
-        outline: none;
-      }
-
-      .chat-input:focus {
-        border-color: var(--primary);
-        box-shadow: 0 0 0 2px var(--primary-subtle);
       }
 
       .btn {
         background: var(--primary);
-        color: white;
+        color: #ffffff;
         border: none;
-        padding: 9px 16px;
         border-radius: 8px;
+        padding: 9px 18px;
         font-size: 0.85rem;
-        font-weight: 600;
+        font-weight: 700;
+        font-family: inherit;
         cursor: pointer;
-        transition: background 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        text-decoration: none;
+        transition: all 0.2s ease;
       }
 
       .btn:hover {
-        background: var(--primary-light);
+        background: var(--primary-hover);
+        transform: translateY(-1px);
       }
 
-      /* Modal Dialog */
-      .modal-backdrop {
-        display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        background: rgba(15, 23, 42, 0.6);
-        backdrop-filter: blur(4px);
-        z-index: 200;
-        justify-content: center;
-        align-items: center;
-        padding: 20px;
-      }
-
-      .modal-card {
+      .btn-outline {
         background: #ffffff;
-        border-radius: 12px;
-        width: 100%;
-        max-width: 480px;
-        padding: 24px;
-        box-shadow: var(--shadow-lg);
-        animation: modalSlide 0.2s ease;
-      }
-
-      .modal-card-lg {
-        background: #ffffff;
-        border-radius: 12px;
-        width: 100%;
-        max-width: 680px;
-        max-height: 88vh;
-        overflow-y: auto;
-        padding: 24px;
-        box-shadow: var(--shadow-lg);
-        animation: modalSlide 0.2s ease;
-      }
-
-      .doc-setup-card {
-        background: #f8fafc;
+        color: var(--primary);
         border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 12px 14px;
-        margin-bottom: 10px;
+      }
+
+      .btn-outline:hover {
+        background: var(--primary-light);
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+
+      .btn-call {
+        background: #10b981;
+        color: #ffffff;
+        box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+      }
+      .btn-call:hover {
+        background: #059669;
+      }
+
+      /* ----------------------------------------------------
+         VIEW 1: LANDING / HOME PAGE
+         ---------------------------------------------------- */
+      .hero-section {
+        max-width: 1100px;
+        margin: 40px auto 60px;
+        padding: 0 24px;
+        text-align: center;
+      }
+
+      .hero-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: var(--primary-light);
+        color: var(--primary);
+        font-size: 0.8rem;
+        font-weight: 700;
+        padding: 6px 14px;
+        border-radius: 9999px;
+        margin-bottom: 20px;
+      }
+
+      .hero-title {
+        font-size: 2.8rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        line-height: 1.2;
+        color: #0f172a;
+        margin-bottom: 18px;
+      }
+
+      .hero-title span {
+        background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .hero-description {
+        font-size: 1.1rem;
+        color: var(--text-muted);
+        max-width: 680px;
+        margin: 0 auto 30px;
+        line-height: 1.6;
+      }
+
+      .hero-cta {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .hero-cta .btn {
+        padding: 13px 28px;
+        font-size: 1rem;
+      }
+
+      .features-grid {
+        max-width: 1100px;
+        margin: 0 auto 80px;
+        padding: 0 24px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 24px;
+      }
+
+      .feature-card {
+        background: #ffffff;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 30px;
+        box-shadow: var(--shadow);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .feature-card:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-lg);
+      }
+
+      .feature-icon {
+        width: 52px;
+        height: 52px;
+        border-radius: 12px;
+        background: var(--primary-light);
+        color: var(--primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.6rem;
+        margin-bottom: 16px;
+      }
+
+      .feature-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      .feature-desc {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        line-height: 1.55;
+      }
+
+      /* ----------------------------------------------------
+         VIEW 2: LOGIN VIEW
+         ---------------------------------------------------- */
+      .login-container {
+        max-width: 440px;
+        margin: 60px auto;
+        padding: 0 20px;
+      }
+
+      .login-card {
+        background: #ffffff;
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 36px 32px;
+        box-shadow: var(--shadow-lg);
+        text-align: center;
+      }
+
+      .login-title {
+        font-size: 1.5rem;
+        font-weight: 800;
+        margin-bottom: 6px;
+      }
+
+      .login-subtitle {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        margin-bottom: 24px;
+      }
+
+      .divider-line {
+        position: relative;
+        text-align: center;
+        margin: 24px 0;
+      }
+
+      .divider-line hr {
+        border: none;
+        border-top: 1px solid var(--border);
+      }
+
+      .divider-line span {
+        position: absolute;
+        top: -9px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #ffffff;
+        padding: 0 10px;
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        font-weight: 600;
+      }
+
+      /* ----------------------------------------------------
+         VIEW 3: FIRST-TIME CLINIC SETUP WIZARD
+         ---------------------------------------------------- */
+      .setup-container {
+        max-width: 720px;
+        margin: 40px auto 80px;
+        padding: 0 20px;
+      }
+
+      .setup-card {
+        background: #ffffff;
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 36px 32px;
+        box-shadow: var(--shadow-lg);
+      }
+
+      .setup-header {
+        margin-bottom: 28px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .section-heading {
+        font-size: 0.85rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--primary);
+        margin: 24px 0 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
       }
 
       .form-grid-2 {
         display: grid;
         grid-template-columns: 1fr 1fr;
-        gap: 12px;
+        gap: 16px;
       }
 
-      @media (max-width: 600px) {
+      @media (max-width: 640px) {
         .form-grid-2 {
           grid-template-columns: 1fr;
         }
@@ -846,1331 +359,736 @@
       .form-group {
         display: flex;
         flex-direction: column;
-        gap: 4px;
-        margin-bottom: 10px;
+        gap: 6px;
+        margin-bottom: 14px;
       }
 
       .form-group label {
-        font-size: 0.72rem;
+        font-size: 0.8rem;
         font-weight: 700;
-        color: var(--text-muted);
-        text-transform: uppercase;
+        color: #334155;
       }
 
-      .dossier-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 12px;
-        background: #f8fafc;
-        padding: 14px;
-        border-radius: 8px;
+      .input-ctrl {
+        width: 100%;
+        padding: 10px 14px;
         border: 1px solid var(--border);
-        margin-bottom: 16px;
+        border-radius: 8px;
+        font-size: 0.88rem;
+        font-family: inherit;
+        outline: none;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
       }
 
-      .dossier-item {
+      .input-ctrl:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+      }
+
+      .doctor-entry-box {
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px;
+        margin-bottom: 14px;
+      }
+
+      /* ----------------------------------------------------
+         VIEW 4: DOCTOR DASHBOARD & SCHEDULE
+         ---------------------------------------------------- */
+      .dashboard-layout {
+        max-width: 1100px;
+        margin: 28px auto 80px;
+        padding: 0 24px;
+      }
+
+      .dash-subnav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+
+      .tab-buttons {
+        display: flex;
+        background: #e2e8f0;
+        padding: 4px;
+        border-radius: 10px;
+        gap: 4px;
+      }
+
+      .tab-btn {
+        background: transparent;
+        border: none;
+        padding: 8px 18px;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+        color: var(--text-muted);
+        transition: all 0.15s ease;
+      }
+
+      .tab-btn.active {
+        background: #ffffff;
+        color: var(--text);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .filter-bar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .timeline-card {
+        background: #ffffff;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+
+      .timeline-header {
+        padding: 18px 24px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #ffffff;
+      }
+
+      .slot-list {
         display: flex;
         flex-direction: column;
-        gap: 2px;
+        padding: 16px 20px;
+        gap: 10px;
       }
 
-      .dossier-label {
-        font-size: 0.72rem;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        font-weight: 600;
+      /* Slot Cards */
+      .slot-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 18px;
+        border-radius: 10px;
+        border-left: 4px solid transparent;
+        transition: all 0.15s ease;
       }
 
-      .dossier-val {
-        font-size: 0.92rem;
-        font-weight: 600;
-        color: var(--text-main);
+      .slot-item.available {
+        background: #f0fdf4;
+        border-left-color: var(--success);
       }
 
-      @keyframes modalSlide {
-        from {
-          transform: translateY(12px);
-          opacity: 0;
-        }
-        to {
-          transform: translateY(0);
-          opacity: 1;
-        }
+      .slot-item.booked {
+        background: #eff6ff;
+        border-left-color: #3b82f6;
+        cursor: pointer;
+      }
+
+      .slot-item.booked:hover {
+        background: #e0f2fe;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+      }
+
+      .slot-time {
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: #1e293b;
+        min-width: 150px;
+      }
+
+      .slot-info {
+        flex: 1;
+        margin-left: 12px;
+      }
+
+      .slot-status-tag {
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 9999px;
+      }
+
+      .tag-available {
+        background: var(--success-light);
+        color: #065f46;
+      }
+
+      .tag-booked {
+        background: #dbeafe;
+        color: #1e40af;
+      }
+
+      /* Modal styles */
+      .modal-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(4px);
+        align-items: center;
+        justify-content: center;
+        z-index: 100;
+        padding: 20px;
+      }
+
+      .modal-card {
+        background: #ffffff;
+        border-radius: 20px;
+        max-width: 520px;
+        width: 100%;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        overflow: hidden;
+        animation: scaleUp 0.2s ease forwards;
+      }
+
+      @keyframes scaleUp {
+        from { opacity: 0; transform: scale(0.95); }
+        to { opacity: 1; transform: scale(1); }
       }
 
       .modal-header {
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--border);
         display: flex;
-        justify-content: space-between;
         align-items: center;
-        margin-bottom: 16px;
+        justify-content: space-between;
       }
 
       .modal-title {
         font-size: 1.15rem;
-        font-weight: 700;
-        color: var(--text-main);
+        font-weight: 800;
       }
 
-      .btn-close-modal {
-        background: none;
-        border: none;
-        font-size: 1.25rem;
+      .modal-body {
+        padding: 20px 24px;
+      }
+
+      .dossier-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #f1f5f9;
+        font-size: 0.88rem;
+      }
+
+      .dossier-label {
         color: var(--text-muted);
-        cursor: pointer;
+        font-weight: 600;
       }
 
-      /* Login Overlay for Unauthenticated State */
-      #authModal {
-        display: none;
+      .dossier-val {
+        font-weight: 700;
+        color: #0f172a;
+        text-align: right;
+      }
+
+      .modal-footer {
+        padding: 16px 24px;
+        background: #f8fafc;
+        border-top: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 12px;
+      }
+
+      .btn-reschedule {
+        background: var(--warning-light);
+        color: #92400e;
+        border: 1px solid #fde68a;
+      }
+      .btn-reschedule:hover {
+        background: #fde68a;
+      }
+
+      .btn-cancel {
+        background: var(--danger-light);
+        color: #991b1b;
+        border: 1px solid #fecaca;
+      }
+      .btn-cancel:hover {
+        background: #fecaca;
       }
     </style>
   </head>
   <body>
-    <!-- Emergency Escalation Banner -->
-    <div id="emergencyBanner" role="alert" aria-live="assertive">
-      <div class="emergency-container">
+    <!-- Top Global Navigation Bar -->
+    <header class="navbar">
+      <div class="nav-brand" onclick="navigateTo('home')">
+        <div class="brand-icon">🩺</div>
         <div>
-          <div class="emergency-title">
-            <span>🚨</span> CRITICAL EMERGENCY ESCALATION DETECTED (108 TRIAGE)
-          </div>
-          <div class="emergency-msg" id="emergencyBannerText">
-            Patient reported acute severe symptoms. AI agent triggered hardcoded emergency transfer
-            to 108 Emergency Services.
-          </div>
+          <div class="brand-title" id="navBrandTitle">Appointly</div>
+          <div class="brand-subtitle" id="navBrandSubtitle">Smart Clinic Voice Receptionist</div>
         </div>
-        <button class="btn-ack" onclick="acknowledgeEmergency()">Acknowledge & Dismiss</button>
       </div>
-    </div>
 
-    <!-- Navigation Header -->
-    <header>
-      <div class="nav-container">
-        <a href="/" class="brand">
-          <img
-            src="/logo.jpg"
-            alt="Appointly Logo"
-            class="brand-logo"
-            onerror="this.style.display = 'none'"
-          />
-          <div>
-            <div class="brand-title">Appointly</div>
-            <div class="brand-subtitle" id="brandSubtitle">Doctor OPD Dashboard</div>
-          </div>
+      <div class="nav-actions">
+        <!-- Live Call Action (always accessible) -->
+        <a href="/call" target="_blank" class="btn btn-call" title="Open Live Phone Call with AI Receptionist">
+          📞 Call Clinic (Live AI) ↗
         </a>
 
-        <div class="nav-actions">
-          <a
-            href="/call"
-            target="_blank"
-            class="status-badge"
-            style="text-decoration: none; background: #16a34a; color: #ffffff; font-weight: 800; box-shadow: 0 0 15px rgba(22, 163, 74, 0.4); padding: 8px 16px; font-size: 0.85rem;"
-          >
-            📞 Open Live Patient Call (Gemini) ↗
-          </a>
-
-          <div class="status-badge" id="sseStatus">
-            <div class="status-dot"></div>
-            <span id="sseStatusText">Neon Postgres Live</span>
-          </div>
-
-          <!-- Doctor Profile / Auth Bar -->
-          <div id="doctorProfileChip" class="doctor-chip">
-            <div class="doctor-chip-avatar" id="docAvatar">👨‍⚕️</div>
-            <div style="display: flex; flex-direction: column">
-              <strong id="docName" style="font-size: 0.78rem; line-height: 1.2"
-                >Doctor</strong
-              >
-              <span id="docSpecialty" style="font-size: 0.68rem; color: var(--text-muted)"
-                >Consulting Physician</span
-              >
-            </div>
-            <button class="btn-logout" onclick="doctorLogout()" title="Sign Out">Sign Out</button>
-          </div>
-
-          <!-- Login Trigger if logged out -->
-          <button
-            id="btnLoginHeader"
-            class="btn"
-            style="display: none; padding: 6px 14px; font-size: 0.8rem"
-            onclick="openAuthModal()"
-          >
-            Doctor Sign In
+        <!-- Logged In Doctor Profile Chip -->
+        <div id="doctorNavChip" style="display: none; align-items: center; gap: 8px;">
+          <span id="navDocName" style="font-weight: 700; font-size: 0.85rem;">Doctor</span>
+          <button class="btn btn-outline" style="padding: 6px 12px;" onclick="navigateTo('dashboard', 'settings')">
+            ⚙️ Settings
+          </button>
+          <button class="btn btn-outline" style="padding: 6px 12px;" onclick="logout()">
+            Sign Out
           </button>
         </div>
+
+        <!-- Login Trigger if logged out -->
+        <button id="navLoginBtn" class="btn btn-outline" onclick="navigateTo('login')">
+          👨‍⚕️ Doctor Login
+        </button>
       </div>
     </header>
 
-    <main>
-      <!-- Key Metrics Row -->
-      <div class="metrics-grid">
-        <div class="metric-card">
-          <div class="metric-title">Today's Appointments</div>
-          <div class="metric-value">
-            <span id="countTodayApts">0</span>
-            <span style="font-size: 0.85rem; font-weight: 500; color: var(--text-muted)"
-              >/ <span id="countTotalApts">0</span> total</span
-            >
-          </div>
-          <div class="metric-meta">Synchronized live via Outbox SSE</div>
+    <!-- ====================================================
+         VIEW 1: HOME / LANDING PAGE
+         ==================================================== -->
+    <main id="viewHome" class="app-view active">
+      <section class="hero-section">
+        <div class="hero-badge">
+          <span>⚡</span> Real-time Clinic Voice AI Assistant
+        </div>
+        <h1 class="hero-title">
+          Automate Clinic Appointments with <span>Human-like Voice AI</span>
+        </h1>
+        <p class="hero-description">
+          A smart Hinglish voice receptionist that takes patient phone calls 24/7, verifies open doctor consultation hours, prevents double-booking, and synchronizes instantly to your doctor schedule.
+        </p>
+
+        <div class="hero-cta">
+          <button class="btn" onclick="navigateTo('login')">
+            👨‍⚕️ Doctor Dashboard Login &rarr;
+          </button>
+          <a href="/call" target="_blank" class="btn btn-call">
+            📞 Test Live Patient Call ↗
+          </a>
+        </div>
+      </section>
+
+      <!-- Clean Feature Cards -->
+      <section class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🤖</div>
+          <h3 class="feature-title">24/7 AI Voice Receptionist</h3>
+          <p class="feature-desc">
+            Answers patient calls in natural Hinglish or English. Handles booking, timing inquiries, and triage without keeping patients on hold.
+          </p>
         </div>
 
-        <div class="metric-card">
-          <div class="metric-title">Active OPD Specialists</div>
-          <div class="metric-value" id="countDoctors">4</div>
-          <div class="metric-meta">Configurable consultation hours</div>
+        <div class="feature-card">
+          <div class="feature-icon">📅</div>
+          <h3 class="feature-title">Real-Time Doctor Scheduling</h3>
+          <p class="feature-desc">
+            Define consultation hours for each doctor. Open slots show as available, and confirmed bookings reflect in under 2 seconds.
+          </p>
         </div>
 
-        <div class="metric-card">
-          <div class="metric-title">Pending Callbacks</div>
-          <div class="metric-value" id="countCallbacks" style="color: var(--warning)">0</div>
-          <div class="metric-meta">Actionable fallback tickets</div>
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3 class="feature-title">Zero Double-Booking</h3>
+          <p class="feature-desc">
+            Robust transactional guarantees with atomic locking. Appointments can be rescheduled or cancelled with immediate slot release.
+          </p>
         </div>
+      </section>
+    </main>
 
-        <div class="metric-card">
-          <div class="metric-title">Evon AI Credits Meter</div>
-          <div class="metric-value" style="font-size: 1.5rem">
-            <span id="creditsRemaining">5,000</span>
-            <span style="font-size: 0.8rem; font-weight: 500; color: var(--text-muted)"
-              >/ 5,000</span
-            >
-          </div>
-          <div class="metric-meta" id="creditsUsageMeta">Budget: 5,000 credits (0 used)</div>
-          <div class="credit-progress-bar">
-            <div class="credit-progress-fill" id="creditProgressBar" style="width: 100%"></div>
-          </div>
-        </div>
-      </div>
+    <!-- ====================================================
+         VIEW 2: DOCTOR LOGIN PAGE
+         ==================================================== -->
+    <main id="viewLogin" class="app-view">
+      <div class="login-container">
+        <div class="login-card">
+          <div style="font-size: 2.2rem; margin-bottom: 10px;">🔐</div>
+          <h2 class="login-title">Doctor Portal Sign In</h2>
+          <p class="login-subtitle">
+            Sign in to access your clinic schedule, customize timings, and manage patient appointments.
+          </p>
 
-      <!-- Main Dashboard Grid -->
-      <div class="dashboard-layout">
-        <!-- Left: Tabs & Rich Appointments or Day View -->
-        <div>
-          <!-- Tab Navigation -->
-          <div class="tabs-header">
-            <button class="tab-btn active" id="tabBtnCards" onclick="switchTab('cards')">
-              📋 Appointment Cards
-              <span class="tab-badge" id="tabBadgeCards">0</span>
-            </button>
-            <button class="tab-btn" id="tabBtnDayView" onclick="switchTab('dayview')">
-              📅 Day OPD Schedule View
-            </button>
-            <button class="tab-btn" id="tabBtnCallbacks" onclick="switchTab('callbacks')">
-              📞 Callback Tickets
-              <span
-                class="tab-badge"
-                id="tabBadgeCallbacks"
-                style="background: #fef3c7; color: #b45309"
-                >0</span
-              >
-            </button>
-            <button class="tab-btn" id="tabBtnSummaries" onclick="switchTab('summaries')">
-              🩺 AI Call Summaries
-              <span
-                class="tab-badge"
-                id="tabBadgeSummaries"
-                style="background: #e0f2fe; color: #0369a1"
-                >0</span
-              >
-            </button>
-            <button class="tab-btn" id="tabBtnObservability" onclick="switchTab('observability')">
-              📊 Observability &amp; SLO
-            </button>
-            <button class="tab-btn" id="tabBtnSettings" onclick="switchTab('settings')">
-              ⚙️ Clinic Settings
-            </button>
+          <!-- Google Identity Sign-In Button -->
+          <div style="display: flex; justify-content: center; min-height: 44px; margin-bottom: 12px;">
+            <div id="g_id_signin"></div>
           </div>
 
-          <!-- TAB 1: Rich Appointment Cards View -->
-          <div id="tabContentCards">
-            <div class="panel">
-              <div class="filters-row">
-                <div class="filter-chips">
-                  <span class="chip active" onclick="setAptFilter('ALL', this)"
-                    >All Appointments</span
-                  >
-                  <span class="chip" onclick="setAptFilter('TODAY', this)">Today Only</span>
-                  <span class="chip" onclick="setAptFilter('CONFIRMED', this)">Confirmed</span>
-                  <span class="chip" onclick="setAptFilter('RESCHEDULED', this)">Rescheduled</span>
-                  <span class="chip" onclick="setAptFilter('COMPLETED', this)">Completed</span>
-                </div>
-                <button class="chip" onclick="fetchStats()" title="Refresh records from Neon">
-                  🔄 Refresh
-                </button>
-              </div>
-
-              <!-- List of Cards -->
-              <div class="appointments-list" id="appointmentsList">
-                <div style="text-align: center; color: var(--text-muted); padding: 50px 0">
-                  Loading appointments from secure Neon Postgres...
-                </div>
-              </div>
-            </div>
+          <div class="divider-line">
+            <hr />
+            <span>OR INSTANT LOGIN</span>
           </div>
 
-          <!-- TAB 2: Day OPD Schedule View -->
-          <div id="tabContentDayView" style="display: none">
-            <div class="panel">
-              <div class="panel-header">
-                <div class="panel-title"><span>📅</span> Interactive Day OPD Schedule Timeline</div>
-                <div style="display: flex; gap: 8px; align-items: center">
-                  <label style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted)"
-                    >DATE:</label
-                  >
-                  <input
-                    type="date"
-                    id="dayViewDatePicker"
-                    class="chat-input"
-                    style="padding: 4px 8px; font-size: 0.8rem"
-                    onchange="renderDayViewTimeline()"
-                  />
-                </div>
-              </div>
+          <!-- One-Click Instant Access for Testing / Quick Access -->
+          <button class="btn" style="width: 100%; justify-content: center; padding: 12px;" onclick="quickLogin()">
+            👨‍⚕️ Continue as Doctor (Instant Sign In)
+          </button>
 
-              <div class="day-view-container">
-                <div style="font-size: 0.8rem; color: var(--text-muted)">
-                  Visualizing consultation hours and booked slots for:
-                  <strong id="dayViewDocName">Doctor Schedule</strong>
-                </div>
-
-                <div class="day-timeline-grid" id="dayTimelineGrid">
-                  <!-- Rendered dynamically -->
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- TAB 3: Callback Tickets -->
-          <div id="tabContentCallbacks" style="display: none">
-            <div class="panel">
-              <div class="panel-header">
-                <div class="panel-title"><span>📞</span> Pending Patient Callback Requests</div>
-                <span style="font-size: 0.75rem; color: var(--text-muted)"
-                  >Graceful Fallback Tickets</span
-                >
-              </div>
-              <div id="callbacksContainer">
-                <!-- Rendered dynamically -->
-              </div>
-            </div>
-          </div>
-
-          <!-- TAB 4: Doctor Call Summaries (Phase 7 Lifecycle) -->
-          <div id="tabContentSummaries" style="display: none">
-            <div class="panel">
-              <div class="panel-header">
-                <div class="panel-title"><span>🩺</span> AI Call Summaries & Patient Concerns</div>
-                <button
-                  class="chip"
-                  onclick="fetchCallSummaries()"
-                  title="Refresh call summaries from Neon"
-                >
-                  🔄 Refresh
-                </button>
-              </div>
-              <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 16px">
-                Generated automatically by the AI agent after each call. Displays the patient's
-                concern in their own words, preferred time, and booking outcome (Rule 4: strictly
-                non-diagnostic).
-              </div>
-              <div class="appointments-list" id="callSummariesContainer">
-                <div style="text-align: center; color: var(--text-muted); padding: 40px 0">
-                  Loading call summaries...
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- TAB 5: Observability, Metrics & SLO View -->
-          <div id="tabContentObservability" style="display: none">
-            <div class="panel">
-              <div class="panel-header">
-                <div class="panel-title">
-                  <span>📊</span> Production Observability, SLOs &amp; Telemetry
-                </div>
-                <div style="display: flex; gap: 10px; align-items: center">
-                  <a
-                    href="/metrics"
-                    target="_blank"
-                    class="chip"
-                    style="text-decoration: none; color: var(--primary); font-weight: 700"
-                  >
-                    ⚡ Prometheus (/metrics) &rarr;
-                  </a>
-                  <button class="chip" onclick="fetchMetricsAndAlerts()">🔄 Refresh</button>
-                </div>
-              </div>
-
-              <!-- Active Alerts Banner if Any -->
-              <div id="observabilityAlertsContainer" style="margin-bottom: 16px"></div>
-
-              <!-- SLO Cards Row -->
-              <div
-                style="
-                  display: grid;
-                  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-                  gap: 16px;
-                  margin-bottom: 20px;
-                "
-              >
-                <div
-                  style="
-                    background: #f8fafc;
-                    border: 1px solid var(--border);
-                    border-radius: 10px;
-                    padding: 16px;
-                  "
-                >
-                  <div
-                    style="
-                      display: flex;
-                      justify-content: space-between;
-                      align-items: center;
-                      margin-bottom: 8px;
-                    "
-                  >
-                    <div
-                      style="
-                        font-size: 0.8rem;
-                        font-weight: 700;
-                        color: var(--text-muted);
-                        text-transform: uppercase;
-                      "
-                    >
-                      Availability SLO
-                    </div>
-                    <span
-                      id="sloAvailBadge"
-                      class="tab-badge"
-                      style="background: #dcfce7; color: #166534"
-                      >MET</span
-                    >
-                  </div>
-                  <div
-                    style="font-size: 1.8rem; font-weight: 800; color: var(--text-main)"
-                    id="sloAvailActual"
-                  >
-                    99.9%
-                  </div>
-                  <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px">
-                    Target: 99.9% Availability (Voice &amp; API)
-                  </div>
-                </div>
-
-                <div
-                  style="
-                    background: #f8fafc;
-                    border: 1px solid var(--border);
-                    border-radius: 10px;
-                    padding: 16px;
-                  "
-                >
-                  <div
-                    style="
-                      display: flex;
-                      justify-content: space-between;
-                      align-items: center;
-                      margin-bottom: 8px;
-                    "
-                  >
-                    <div
-                      style="
-                        font-size: 0.8rem;
-                        font-weight: 700;
-                        color: var(--text-muted);
-                        text-transform: uppercase;
-                      "
-                    >
-                      P95 Turn Latency SLO
-                    </div>
-                    <span
-                      id="sloLatencyBadge"
-                      class="tab-badge"
-                      style="background: #dcfce7; color: #166534"
-                      >MET</span
-                    >
-                  </div>
-                  <div style="font-size: 1.8rem; font-weight: 800; color: var(--text-main)">
-                    <span id="sloLatencyActual">340</span> ms
-                  </div>
-                  <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px">
-                    Target: P95 &lt; 2,000 ms (Speech-to-first-audio)
-                  </div>
-                </div>
-
-                <div
-                  style="
-                    background: #f8fafc;
-                    border: 1px solid var(--border);
-                    border-radius: 10px;
-                    padding: 16px;
-                  "
-                >
-                  <div
-                    style="
-                      display: flex;
-                      justify-content: space-between;
-                      align-items: center;
-                      margin-bottom: 8px;
-                    "
-                  >
-                    <div
-                      style="
-                        font-size: 0.8rem;
-                        font-weight: 700;
-                        color: var(--text-muted);
-                        text-transform: uppercase;
-                      "
-                    >
-                      Avg Credits / Call
-                    </div>
-                    <span class="tab-badge" style="background: #e0f2fe; color: #0369a1"
-                      >METERED</span
-                    >
-                  </div>
-                  <div style="font-size: 1.8rem; font-weight: 800; color: var(--text-main)">
-                    <span id="metricAvgCredits">0.00</span>
-                  </div>
-                  <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px">
-                    Rate: ~₹0.05 per Gnani AI credit burned
-                  </div>
-                </div>
-              </div>
-
-              <!-- Free-Tier Architecture Note -->
-              <div
-                style="
-                  background: #eff6ff;
-                  border-left: 4px solid #3b82f6;
-                  padding: 12px 16px;
-                  border-radius: 6px;
-                  font-size: 0.8rem;
-                  color: #1e40af;
-                  margin-bottom: 20px;
-                "
-              >
-                <strong>Note on Free-Tier Limits:</strong> Neon Serverless compute suspends after 5
-                min idle, inducing a ~500ms–1.5s cold-start on the first turn. Pre-cached
-                greeting/apology audio buffers in memory completely hide this latency from the
-                caller.
-              </div>
-
-              <!-- Call & Conversion Breakdown -->
-              <div
-                style="
-                  display: grid;
-                  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-                  gap: 16px;
-                  margin-bottom: 20px;
-                "
-              >
-                <div
-                  style="
-                    background: #ffffff;
-                    border: 1px solid var(--border);
-                    border-radius: 8px;
-                    padding: 14px;
-                  "
-                >
-                  <h4 style="font-size: 0.85rem; margin-bottom: 10px; color: var(--text-main)">
-                    📞 Telephony Call Breakdown
-                  </h4>
-                  <div
-                    style="
-                      display: flex;
-                      justify-content: space-between;
-                      padding: 6px 0;
-                      border-bottom: 1px dashed var(--border);
-                      font-size: 0.8rem;
-                    "
-                  >
-                    <span>Total Calls Handled:</span> <strong id="metricCallsTotal">0</strong>
-                  </div>
-                  <div
-                    style="
-                      display: flex;
-                      justify-content: space-between;
-                      padding: 6px 0;
-                      border-bottom: 1px dashed var(--border);
-                      font-size: 0.8rem;
-                    "
-                  >
-                    <span>Completed Successfully:</span>
-                    <strong style="color: var(--accent)" id="metricCallsCompleted">0</strong>
-                  </div>
-                  <div
-                    style="
-                      display: flex;
-                      justify-content: space-between;
-                      padding: 6px 0;
-                      border-bottom: 1px dashed var(--border);
-                      font-size: 0.8rem;
-                    "
-                  >
-                    <span>Emergency Escalations:</span>
-                    <strong style="color: var(--danger)" id="metricCallsEmergency">0</strong>
-                  </div>
-                  <div
-                    style="
-                      display: flex;
-                      justify-content: space-between;
-                      padding: 6px 0;
-                      font-size: 0.8rem;
-                    "
-                  >
-                    <span>Dropped / Errored:</span>
-                    <strong style="color: var(--warning)" id="metricCallsDropped">0</strong>
-                  </div>
-                </div>
-
-                <div
-                  style="
-                    background: #ffffff;
-                    border: 1px solid var(--border);
-                    border-radius: 8px;
-                    padding: 14px;
-                  "
-                >
-                  <h4 style="font-size: 0.85rem; margin-bottom: 10px; color: var(--text-main)">
-                    🏥 Booking Funnel &amp; Conversion
-                  </h4>
-                  <div
-                    style="
-                      display: flex;
-                      justify-content: space-between;
-                      padding: 6px 0;
-                      border-bottom: 1px dashed var(--border);
-                      font-size: 0.8rem;
-                    "
-                  >
-                    <span>Bookings Succeeded:</span>
-                    <strong style="color: var(--accent)" id="metricBookingsSucceeded">0</strong>
-                  </div>
-                  <div
-                    style="
-                      display: flex;
-                      justify-content: space-between;
-                      padding: 6px 0;
-                      border-bottom: 1px dashed var(--border);
-                      font-size: 0.8rem;
-                    "
-                  >
-                    <span>Bookings Failed (Full):</span>
-                    <strong id="metricBookingsFailed">0</strong>
-                  </div>
-                  <div
-                    style="
-                      display: flex;
-                      justify-content: space-between;
-                      padding: 6px 0;
-                      border-bottom: 1px dashed var(--border);
-                      font-size: 0.8rem;
-                    "
-                  >
-                    <span>Rescheduled &amp; Cancelled:</span>
-                    <strong
-                      ><span id="metricReschedules">0</span> /
-                      <span id="metricCancels">0</span></strong
-                    >
-                  </div>
-                  <div
-                    style="
-                      display: flex;
-                      justify-content: space-between;
-                      padding: 6px 0;
-                      font-size: 0.8rem;
-                    "
-                  >
-                    <span>Booking Conversion Rate:</span>
-                    <strong style="color: var(--primary)" id="metricConversionRate">0%</strong>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Stage Latency Percentiles Table -->
-              <div style="margin-top: 10px">
-                <h4 style="font-size: 0.85rem; margin-bottom: 10px; color: var(--text-main)">
-                  ⏱️ Per-Stage Latency Percentiles (Milliseconds)
-                </h4>
-                <div style="overflow-x: auto">
-                  <table
-                    style="
-                      width: 100%;
-                      border-collapse: collapse;
-                      font-size: 0.8rem;
-                      text-align: left;
-                    "
-                  >
-                    <thead>
-                      <tr style="background: #f1f5f9; border-bottom: 2px solid var(--border)">
-                        <th style="padding: 8px 12px">Stage</th>
-                        <th style="padding: 8px 12px">Min</th>
-                        <th style="padding: 8px 12px">P50 (Median)</th>
-                        <th style="padding: 8px 12px">P90</th>
-                        <th style="padding: 8px 12px">P95</th>
-                        <th style="padding: 8px 12px">Max</th>
-                        <th style="padding: 8px 12px">Avg</th>
-                      </tr>
-                    </thead>
-                    <tbody id="latencyTableBody">
-                      <tr style="border-bottom: 1px solid var(--border)">
-                        <td style="padding: 8px 12px; font-weight: 700">Full Turn (Total)</td>
-                        <td id="latTurnMin">-</td>
-                        <td id="latTurnP50">-</td>
-                        <td id="latTurnP90">-</td>
-                        <td id="latTurnP95" style="font-weight: 700; color: var(--primary)">-</td>
-                        <td id="latTurnMax">-</td>
-                        <td id="latTurnAvg">-</td>
-                      </tr>
-                      <tr style="border-bottom: 1px solid var(--border)">
-                        <td style="padding: 8px 12px">Prisma STT</td>
-                        <td id="latSttMin">-</td>
-                        <td id="latSttP50">-</td>
-                        <td id="latSttP90">-</td>
-                        <td id="latSttP95">-</td>
-                        <td id="latSttMax">-</td>
-                        <td id="latSttAvg">-</td>
-                      </tr>
-                      <tr style="border-bottom: 1px solid var(--border)">
-                        <td style="padding: 8px 12px">Evon LLM First Token</td>
-                        <td id="latLlmMin">-</td>
-                        <td id="latLlmP50">-</td>
-                        <td id="latLlmP90">-</td>
-                        <td id="latLlmP95">-</td>
-                        <td id="latLlmMax">-</td>
-                        <td id="latLlmAvg">-</td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 8px 12px">Timbre TTS First Audio</td>
-                        <td id="latTtsMin">-</td>
-                        <td id="latTtsP50">-</td>
-                        <td id="latTtsP90">-</td>
-                        <td id="latTtsP95">-</td>
-                        <td id="latTtsMax">-</td>
-                        <td id="latTtsAvg">-</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- TAB 6: Clinic & Doctor Settings -->
-          <div id="tabContentSettings" style="display: none">
-            <div class="panel">
-              <div class="panel-header" style="margin-bottom: 16px">
-                <div>
-                  <div class="panel-title"><span>⚙️</span> Clinic Profile &amp; Doctor Roster Configuration</div>
-                  <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px">
-                    Update clinic timings, add/edit doctors, and customize OPD slots and fees anytime.
-                  </div>
-                </div>
-              </div>
-
-              <form id="settingsForm" onsubmit="submitClinicSettings(event)">
-                <div style="font-size: 0.82rem; font-weight: 700; color: var(--primary); text-transform: uppercase; margin-bottom: 8px">
-                  1. Clinic Information
-                </div>
-                <div class="form-grid-2">
-                  <div class="form-group">
-                    <label>Clinic Name</label>
-                    <input type="text" id="setClinicName" class="chat-input" required />
-                  </div>
-                  <div class="form-group">
-                    <label>Clinic Phone / Helpline</label>
-                    <input type="text" id="setClinicPhone" class="chat-input" required />
-                  </div>
-                </div>
-                <div class="form-group">
-                  <label>Clinic Address</label>
-                  <input type="text" id="setClinicAddress" class="chat-input" required />
-                </div>
-                <div class="form-grid-2">
-                  <div class="form-group">
-                    <label>General Opening Time</label>
-                    <input type="time" id="setOpeningTime" class="chat-input" required />
-                  </div>
-                  <div class="form-group">
-                    <label>General Closing Time</label>
-                    <input type="time" id="setClosingTime" class="chat-input" required />
-                  </div>
-                </div>
-
-                <div style="margin-top: 18px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center">
-                  <div style="font-size: 0.82rem; font-weight: 700; color: var(--primary); text-transform: uppercase">
-                    2. Doctor Roster &amp; OPD Consultation Hours
-                  </div>
-                  <div style="display: flex; align-items: center; gap: 8px">
-                    <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600">Doctors Count:</label>
-                    <select id="setDoctorCountSelect" class="chat-input" style="padding: 4px 8px; width: auto" onchange="renderSettingsDoctorCards(this.value)">
-                      <option value="1">1 Doctor</option>
-                      <option value="2">2 Doctors</option>
-                      <option value="3">3 Doctors</option>
-                      <option value="4" selected>4 Doctors</option>
-                      <option value="5">5 Doctors</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div id="setDoctorCardsContainer" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px">
-                  <!-- Doctor inputs rendered dynamically -->
-                </div>
-
-                <div style="display: flex; justify-content: flex-end; gap: 8px; padding-top: 14px; border-top: 1px solid var(--border)">
-                  <button type="submit" class="btn">
-                    💾 Save Changes &amp; Synchronize AI
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-
-        <!-- Right Column: Patient Voice AI Simulator & Doctor OPD Hours Config -->
-        <div style="display: flex; flex-direction: column; gap: 20px">
-          <!-- Live Voice Assistant Simulator -->
-          <div class="panel">
-            <div class="panel-header">
-              <div class="panel-title"><span>🎙️</span> Voice AI Simulator</div>
-              <span style="font-size: 0.72rem; color: var(--text-muted)"
-                >Hinglish Natural Speech</span
-              >
-            </div>
-
-            <div class="chat-box" id="chatBox">
-              <div class="chat-message chat-bot">
-                Namaste! Main Appointly hoon. <br />
-                Aap kis doctor ke sath appointment book ya reschedule karna chahte hain?
-              </div>
-            </div>
-
-            <div class="filters-row" style="margin-top: 10px; margin-bottom: 6px">
-              <div class="filter-chips">
-                <span
-                  class="chip"
-                  onclick="sendQuickPrompt('Mujhe appointment book karna hai')"
-                >
-                  📅 Book Appointment
-                </span>
-                <span
-                  class="chip"
-                  onclick="sendQuickPrompt('Kaunse specialist doctors available hain?')"
-                >
-                  👨‍⚕️ Available Doctors?
-                </span>
-                <span
-                  class="chip"
-                  style="color: var(--danger); border-color: #fca5a5"
-                  onclick="
-                    sendQuickPrompt(
-                      'Emergency: Patient ko seene me tez dard aur saans nahi aa rahi!'
-                    )
-                  "
-                >
-                  🚨 Emergency 108 Test
-                </span>
-              </div>
-            </div>
-
-            <div class="chat-input-row">
-              <input
-                type="text"
-                id="chatInput"
-                class="chat-input"
-                placeholder="Type in Hinglish (e.g. kal shaam 6 baje appointment)..."
-                onkeydown="if (event.key === 'Enter') sendMessage();"
-              />
-              <button class="btn" onclick="sendMessage()">Send</button>
-            </div>
-          </div>
-
-          <!-- Doctor OPD Schedule & Clinic Timing Config -->
-          <div class="panel">
-            <div class="panel-header">
-              <div class="panel-title"><span>🩺</span> OPD Consultation Schedule</div>
-              <span style="font-size: 0.72rem; color: var(--text-muted)">Doctor Config</span>
-            </div>
-
-            <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 12px">
-              Doctor can decide active clinic hours. The voice agent strictly respects these
-              consultation timings and will never book slots outside this window.
-            </p>
-
-            <div style="display: flex; flex-direction: column; gap: 10px">
-              <div>
-                <label
-                  style="
-                    font-size: 0.72rem;
-                    font-weight: 700;
-                    color: var(--text-muted);
-                    display: block;
-                    margin-bottom: 4px;
-                  "
-                >
-                  SELECT DOCTOR
-                </label>
-                <select
-                  id="scheduleDoctorSelect"
-                  class="chat-input"
-                  style="width: 100%"
-                  onchange="onDoctorSelectChange()"
-                >
-                  <!-- Dynamically populated -->
-                </select>
-              </div>
-
-              <div>
-                <label
-                  style="
-                    font-size: 0.72rem;
-                    font-weight: 700;
-                    color: var(--text-muted);
-                    display: block;
-                    margin-bottom: 4px;
-                  "
-                >
-                  QUICK OPD PRESETS
-                </label>
-                <div class="filter-chips">
-                  <span class="chip" onclick="applyPreset('evening')"
-                    >🌆 Evening (17:00 - 22:00)</span
-                  >
-                  <span class="chip" onclick="applyPreset('morning')"
-                    >🌅 Morning (09:00 - 13:00)</span
-                  >
-                  <span class="chip" onclick="applyPreset('fullday')"
-                    >☀️ Full Day (09:00 - 18:00)</span
-                  >
-                </div>
-              </div>
-
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
-                <div>
-                  <label
-                    style="
-                      font-size: 0.72rem;
-                      font-weight: 700;
-                      color: var(--text-muted);
-                      display: block;
-                      margin-bottom: 4px;
-                    "
-                  >
-                    OPD START
-                  </label>
-                  <input
-                    type="time"
-                    id="schedStartTime"
-                    class="chat-input"
-                    value="17:00"
-                    style="width: 100%"
-                    onchange="previewSlotsLive()"
-                  />
-                </div>
-                <div>
-                  <label
-                    style="
-                      font-size: 0.72rem;
-                      font-weight: 700;
-                      color: var(--text-muted);
-                      display: block;
-                      margin-bottom: 4px;
-                    "
-                  >
-                    OPD END
-                  </label>
-                  <input
-                    type="time"
-                    id="schedEndTime"
-                    class="chat-input"
-                    value="22:00"
-                    style="width: 100%"
-                    onchange="previewSlotsLive()"
-                  />
-                </div>
-              </div>
-
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
-                <div>
-                  <label
-                    style="
-                      font-size: 0.72rem;
-                      font-weight: 700;
-                      color: var(--text-muted);
-                      display: block;
-                      margin-bottom: 4px;
-                    "
-                  >
-                    SLOT DURATION
-                  </label>
-                  <select
-                    id="schedDuration"
-                    class="chat-input"
-                    style="width: 100%"
-                    onchange="previewSlotsLive()"
-                  >
-                    <option value="15">15 Minutes</option>
-                    <option value="20">20 Minutes</option>
-                    <option value="30" selected>30 Minutes</option>
-                    <option value="45">45 Minutes</option>
-                  </select>
-                </div>
-                <div>
-                  <label
-                    style="
-                      font-size: 0.72rem;
-                      font-weight: 700;
-                      color: var(--text-muted);
-                      display: block;
-                      margin-bottom: 4px;
-                    "
-                  >
-                    CONSULTATION FEE (₹)
-                  </label>
-                  <input
-                    type="number"
-                    id="schedFee"
-                    class="chat-input"
-                    value="500"
-                    style="width: 100%"
-                  />
-                </div>
-              </div>
-
-              <!-- Live Slot Inspector Preview -->
-              <div>
-                <label
-                  style="
-                    font-size: 0.72rem;
-                    font-weight: 700;
-                    color: var(--text-muted);
-                    display: block;
-                    margin-bottom: 4px;
-                  "
-                >
-                  GENERATED SLOTS PREVIEW
-                </label>
-                <div
-                  id="slotsPreviewBox"
-                  class="filter-chips"
-                  style="
-                    background: var(--bg);
-                    padding: 8px;
-                    border-radius: 6px;
-                    border: 1px dashed var(--border);
-                    min-height: 38px;
-                  "
-                >
-                  <!-- Dynamically previewed slots -->
-                </div>
-              </div>
-
-              <div style="display: flex; gap: 10px; align-items: center; margin-top: 6px">
-                <button class="btn" style="flex: 1" onclick="saveDoctorSchedule()">
-                  💾 Save OPD Timing
-                </button>
-                <span
-                  id="scheduleSaveStatus"
-                  style="font-size: 0.78rem; font-weight: 700; color: var(--accent); display: none"
-                >
-                  Saved!
-                </span>
-              </div>
-            </div>
+          <div style="margin-top: 18px;">
+            <a href="javascript:void(0)" onclick="navigateTo('home')" style="font-size: 0.8rem; color: var(--text-muted); text-decoration: none;">
+              &larr; Back to Home
+            </a>
           </div>
         </div>
       </div>
     </main>
 
-    <!-- Reschedule Appointment Modal -->
-    <div id="rescheduleModal" class="modal-backdrop">
+    <!-- ====================================================
+         VIEW 3: FIRST-TIME CLINIC ONBOARDING FORM
+         ==================================================== -->
+    <main id="viewOnboarding" class="app-view">
+      <div class="setup-container">
+        <div class="setup-card">
+          <div class="setup-header">
+            <h2 style="font-size: 1.4rem; font-weight: 800;">🏥 Initial Clinic &amp; Doctor Setup</h2>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">
+              Please enter your clinic operational hours and doctor information. You can modify these anytime in Settings.
+            </p>
+          </div>
+
+          <form onsubmit="submitOnboarding(event)">
+            <div class="section-heading">1. Clinic Information</div>
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label>Clinic Name *</label>
+                <input type="text" id="obClinicName" class="input-ctrl" placeholder="Enter your Clinic Name" required />
+              </div>
+              <div class="form-group">
+                <label>Clinic Helpline / Phone Number *</label>
+                <input type="text" id="obClinicPhone" class="input-ctrl" placeholder="e.g. +91 98765 43210" required />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Clinic Address</label>
+              <input type="text" id="obClinicAddress" class="input-ctrl" placeholder="Enter Clinic Address" />
+            </div>
+
+            <div class="form-grid-2">
+              <div class="form-group">
+                <label>Clinic Opening Time *</label>
+                <input type="time" id="obOpeningTime" class="input-ctrl" value="09:00" required />
+              </div>
+              <div class="form-group">
+                <label>Clinic Closing Time *</label>
+                <input type="time" id="obClosingTime" class="input-ctrl" value="18:00" required />
+              </div>
+            </div>
+
+            <div class="section-heading">
+              <span>2. Doctors &amp; Consultation Hours</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <label style="font-size: 0.75rem; color: var(--text-muted);">How many doctors?</label>
+                <select id="obDoctorCountSelect" class="input-ctrl" style="padding: 4px 8px; width: auto;" onchange="renderDoctorInputs(this.value, 'obDoctorContainer')">
+                  <option value="1" selected>1 Doctor</option>
+                  <option value="2">2 Doctors</option>
+                  <option value="3">3 Doctors</option>
+                  <option value="4">4 Doctors</option>
+                  <option value="5">5 Doctors</option>
+                </select>
+              </div>
+            </div>
+
+            <div id="obDoctorContainer">
+              <!-- Rendered dynamically -->
+            </div>
+
+            <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); text-align: right;">
+              <button type="submit" class="btn" style="padding: 12px 24px; font-size: 0.95rem;">
+                💾 Save Clinic Setup &amp; Open Dashboard &rarr;
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </main>
+
+    <!-- ====================================================
+         VIEW 4: DOCTOR DASHBOARD & SCHEDULE / SETTINGS
+         ==================================================== -->
+    <main id="viewDashboard" class="app-view">
+      <div class="dashboard-layout">
+        <!-- Sub-navigation tabs: Schedule vs Settings -->
+        <div class="dash-subnav">
+          <div class="tab-buttons">
+            <button class="tab-btn active" id="tabBtnSchedule" onclick="switchDashTab('schedule')">
+              📅 OPD Schedule
+            </button>
+            <button class="tab-btn" id="tabBtnSettings" onclick="switchDashTab('settings')">
+              ⚙️ Clinic Settings
+            </button>
+          </div>
+
+          <div class="filter-bar" id="scheduleFilterBar">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted);">Doctor:</label>
+              <select id="dashDoctorSelect" class="input-ctrl" style="padding: 6px 12px; width: auto;" onchange="renderSlotsTimeline()">
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted);">Date:</label>
+              <input type="date" id="dashDatePicker" class="input-ctrl" style="padding: 6px 12px; width: auto;" onchange="renderSlotsTimeline()" />
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB CONTENT: SCHEDULE -->
+        <div id="dashTabContentSchedule">
+          <div class="timeline-card">
+            <div class="timeline-header">
+              <div>
+                <h3 style="font-size: 1.1rem; font-weight: 800;" id="timelineHeaderTitle">Doctor Schedule</h3>
+                <p style="font-size: 0.78rem; color: var(--text-muted);" id="timelineHeaderMeta">
+                  Live slots dynamically generated from clinic hours
+                </p>
+              </div>
+              <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;" id="timelineHoursMeta">
+                ⏰ Clinic Hours: 09:00 - 18:00
+              </div>
+            </div>
+
+            <div class="slot-list" id="slotsContainer">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB CONTENT: CLINIC SETTINGS -->
+        <div id="dashTabContentSettings" style="display: none;">
+          <div class="setup-card">
+            <div class="setup-header">
+              <h2 style="font-size: 1.3rem; font-weight: 800;">⚙️ Clinic Settings &amp; Timings</h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">
+                Update clinic operational timings, doctor consultation hours, and consultation fees.
+              </p>
+            </div>
+
+            <form onsubmit="submitSettingsUpdate(event)">
+              <div class="section-heading">Clinic Information</div>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label>Clinic Name</label>
+                  <input type="text" id="setClinicName" class="input-ctrl" required />
+                </div>
+                <div class="form-group">
+                  <label>Helpline / Phone Number</label>
+                  <input type="text" id="setClinicPhone" class="input-ctrl" required />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Clinic Address</label>
+                <input type="text" id="setClinicAddress" class="input-ctrl" />
+              </div>
+
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label>Clinic Opening Time</label>
+                  <input type="time" id="setOpeningTime" class="input-ctrl" required />
+                </div>
+                <div class="form-group">
+                  <label>Clinic Closing Time</label>
+                  <input type="time" id="setClosingTime" class="input-ctrl" required />
+                </div>
+              </div>
+
+              <div class="section-heading">
+                <span>Doctors Roster &amp; Hours</span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <label style="font-size: 0.75rem; color: var(--text-muted);">Doctor Count:</label>
+                  <select id="setDoctorCountSelect" class="input-ctrl" style="padding: 4px 8px; width: auto;" onchange="renderDoctorInputs(this.value, 'setDoctorContainer')">
+                    <option value="1">1 Doctor</option>
+                    <option value="2">2 Doctors</option>
+                    <option value="3">3 Doctors</option>
+                    <option value="4">4 Doctors</option>
+                    <option value="5">5 Doctors</option>
+                  </select>
+                </div>
+              </div>
+
+              <div id="setDoctorContainer">
+                <!-- Rendered dynamically -->
+              </div>
+
+              <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border); text-align: right;">
+                <button type="submit" class="btn" style="padding: 10px 24px;">
+                  💾 Update Settings &amp; Regenerate Schedule
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ====================================================
+         APPOINTMENT DETAILS MODAL (Patient Dossier)
+         ==================================================== -->
+    <div id="modalAppointmentDetails" class="modal-backdrop">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">📋 Appointment &amp; Patient Details</div>
+          <button style="background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted);" onclick="closeAppointmentModal()">&times;</button>
+        </div>
+
+        <div class="modal-body" id="modalDossierBody">
+          <!-- Populated dynamically on click -->
+        </div>
+
+        <!-- Strictly Two Options: Reschedule or Cancel -->
+        <div class="modal-footer" id="modalDossierFooter">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Reschedule Picker Modal -->
+    <div id="modalReschedulePicker" class="modal-backdrop">
       <div class="modal-card">
         <div class="modal-header">
           <div class="modal-title">🔄 Reschedule Appointment</div>
-          <button class="btn-close-modal" onclick="closeRescheduleModal()">&times;</button>
+          <button style="background: none; border: none; font-size: 1.4rem; cursor: pointer; color: var(--text-muted);" onclick="closeRescheduleModal()">&times;</button>
         </div>
-        <div
-          style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px"
-          id="reschedulePatientName"
-        >
-          Patient: Loading...
-        </div>
-
-        <input type="hidden" id="rescheduleAptId" />
-
-        <div style="display: flex; flex-direction: column; gap: 12px">
-          <div>
-            <label
-              style="
-                font-size: 0.75rem;
-                font-weight: 700;
-                color: var(--text-muted);
-                display: block;
-                margin-bottom: 4px;
-              "
-            >
-              NEW APPOINTMENT DATE
-            </label>
-            <input
-              type="date"
-              id="rescheduleNewDate"
-              class="chat-input"
-              style="width: 100%"
-              onchange="loadRescheduleSlots()"
-            />
-          </div>
-
-          <div>
-            <label
-              style="
-                font-size: 0.75rem;
-                font-weight: 700;
-                color: var(--text-muted);
-                display: block;
-                margin-bottom: 4px;
-              "
-            >
-              NEW TIME SLOT
-            </label>
-            <select id="rescheduleNewSlot" class="chat-input" style="width: 100%">
-              <option value="">Select slot...</option>
-            </select>
-          </div>
-
-          <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px">
-            <button class="btn-action" onclick="closeRescheduleModal()">Cancel</button>
-            <button class="btn" onclick="submitReschedule()">Confirm Reschedule</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Appointment & Patient Details Dossier Modal -->
-    <div id="appointmentDetailsModal" class="modal-backdrop">
-      <div class="modal-card-lg">
-        <div class="modal-header">
-          <div class="modal-title" id="aptDetailTitle">📋 Appointment &amp; Patient Dossier</div>
-          <button class="btn-close-modal" onclick="closeAppointmentDetailsModal()">&times;</button>
-        </div>
-
-        <div id="aptDetailContent">
-          <!-- Populated dynamically via openAppointmentDetails(aptId) -->
-        </div>
-
-        <div id="aptDetailActions" style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border)">
-          <button class="btn-action" onclick="closeAppointmentDetailsModal()">Close</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- One-Time Clinic Onboarding Modal -->
-    <div id="clinicOnboardingModal" class="modal-backdrop">
-      <div class="modal-card-lg">
-        <div class="modal-header">
-          <div>
-            <div class="modal-title">🏥 Welcome Doctor! Clinic &amp; OPD Setup</div>
-            <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px">
-              One-time setup for clinic timings and doctor consultation hours. Customizable anytime in Settings.
-            </div>
-          </div>
-          <button class="btn-close-modal" onclick="closeClinicOnboardingModal()">&times;</button>
-        </div>
-
-        <form id="onboardingForm" onsubmit="submitClinicOnboarding(event)">
-          <div style="font-size: 0.82rem; font-weight: 700; color: var(--primary); text-transform: uppercase; margin-bottom: 8px">
-            1. Clinic Information
-          </div>
-          <div class="form-grid-2">
-            <div class="form-group">
-              <label>Clinic Name</label>
-              <input type="text" id="obClinicName" class="chat-input" placeholder="Enter your Clinic Name" required />
-            </div>
-            <div class="form-group">
-              <label>Clinic Phone / Helpline</label>
-              <input type="text" id="obClinicPhone" class="chat-input" placeholder="e.g. +91 98765 43210" required />
-            </div>
+        <div class="modal-body">
+          <input type="hidden" id="reschedAptId" />
+          <div class="form-group">
+            <label>Select New Date</label>
+            <input type="date" id="reschedNewDate" class="input-ctrl" onchange="loadRescheduleSlots()" />
           </div>
           <div class="form-group">
-            <label>Clinic Address</label>
-            <input type="text" id="obClinicAddress" class="chat-input" placeholder="Enter Clinic Address" required />
-          </div>
-          <div class="form-grid-2">
-            <div class="form-group">
-              <label>General Opening Time</label>
-              <input type="time" id="obOpeningTime" class="chat-input" required value="09:00" />
-            </div>
-            <div class="form-group">
-              <label>General Closing Time</label>
-              <input type="time" id="obClosingTime" class="chat-input" required value="18:00" />
-            </div>
-          </div>
-
-          <div style="margin-top: 16px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center">
-            <div style="font-size: 0.82rem; font-weight: 700; color: var(--primary); text-transform: uppercase">
-              2. Doctors &amp; OPD Consultation Hours
-            </div>
-            <div style="display: flex; align-items: center; gap: 8px">
-              <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600">Number of Doctors:</label>
-              <select id="obDoctorCountSelect" class="chat-input" style="padding: 4px 8px; width: auto" onchange="renderOnboardingDoctorCards(this.value)">
-                <option value="1" selected>1 Doctor</option>
-                <option value="2">2 Doctors</option>
-                <option value="3">3 Doctors</option>
-                <option value="4">4 Doctors</option>
-                <option value="5">5 Doctors</option>
-              </select>
-            </div>
-          </div>
-
-          <div id="obDoctorCardsContainer" style="display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow-y: auto; padding-right: 4px">
-            <!-- Doctor items rendered dynamically -->
-          </div>
-
-          <div style="display: flex; justify-content: flex-end; align-items: center; margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border)">
-            <button type="submit" class="btn" style="padding: 10px 24px; font-weight: 700; font-size: 0.92rem;">
-              💾 Save &amp; Launch OPD Dashboard
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Doctor Auth / Login Modal -->
-    <div id="authModal" class="modal-backdrop">
-      <div class="modal-card">
-        <div class="modal-header">
-          <div class="modal-title">🔐 Doctor Dashboard Login</div>
-          <button class="btn-close-modal" onclick="closeAuthModal()">&times;</button>
-        </div>
-
-        <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 16px">
-          Doctor data and appointments are protected by strict server-side JWT authorization. Sign
-          in using your Google account or 1-Click Clinic Doctor Demo Login:
-        </p>
-
-        <!-- Google Identity Services Sign In Button Container -->
-        <div id="googleAuthSection" style="margin-bottom: 14px">
-          <div id="googleBtnContainer" style="display: flex; justify-content: center; min-height: 44px">
-            <div id="g_id_signin"></div>
-          </div>
-          <div id="googleMissingNotice" style="display: none; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 12px; font-size: 0.76rem; color: #1e40af; line-height: 1.4; margin-top: 8px">
-            <strong>🔑 Google Client ID:</strong> Add <code>GOOGLE_CLIENT_ID</code> to your <code>.env</code> file to enable live Google One-Tap &amp; Sign-In.<br />
-            <em>You can log in below with 1-Click Clinic Doctor Demo Login immediately!</em>
+            <label>Select Open Time Slot</label>
+            <select id="reschedNewSlot" class="input-ctrl">
+              <!-- Available slots -->
+            </select>
           </div>
         </div>
-
-        <div style="position: relative; text-align: center; margin: 18px 0">
-          <hr style="border: none; border-top: 1px solid var(--border)" />
-          <span
-            style="
-              position: absolute;
-              top: -10px;
-              left: 50%;
-              transform: translateX(-50%);
-              background: #ffffff;
-              padding: 0 10px;
-              font-size: 0.75rem;
-              color: var(--text-muted);
-            "
-          >
-            OR ONE-CLICK CLINIC DOCTOR DEMO LOGIN
-          </span>
-        </div>
-
-        <div style="display: flex; flex-direction: column; gap: 8px">
-          <button
-            class="btn"
-            style="
-              padding: 12px 16px;
-              text-align: left;
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              font-size: 0.9rem;
-            "
-            onclick="doctorDevLogin('doctor')"
-          >
-            <div>
-              <strong>👨‍⚕️ One-Click Doctor Login</strong>
-              <div style="font-size: 0.72rem; opacity: 0.85">
-                Instant Dashboard &amp; Onboarding Access
-              </div>
-            </div>
-            <span style="font-size: 0.8rem; font-weight: 700"
-              >Sign In &rarr;</span
-            >
-          </button>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="closeRescheduleModal()">Cancel</button>
+          <button class="btn" onclick="submitReschedule()">Confirm Reschedule</button>
         </div>
       </div>
     </div>
 
     <script>
+      // State Management
       let currentDoctor = null;
-      let cachedClinicProfile = null;
-      let cachedAppointments = [];
+      let cachedProfile = null;
       let cachedDoctors = [];
-      let cachedCallbacks = [];
-      let cachedCallSummaries = [];
-      let activeFilter = 'ALL';
-      let activeTab = 'cards';
+      let cachedAppointments = [];
       let sseConnection = null;
 
-      // Token handling
-      function getAuthToken() {
-        return localStorage.getItem('appointly_doc_token') || '';
-      }
+      const AUTH_KEY = 'appointly_doc_token';
 
+      function getAuthToken() {
+        return localStorage.getItem(AUTH_KEY);
+      }
       function setAuthToken(token) {
-        if (token) {
-          localStorage.setItem('appointly_doc_token', token);
-        } else {
-          localStorage.removeItem('appointly_doc_token');
-        }
+        localStorage.setItem(AUTH_KEY, token);
+      }
+      function removeAuthToken() {
+        localStorage.removeItem(AUTH_KEY);
       }
 
       function authHeaders() {
         const token = getAuthToken();
-        const headers = { 'Content-Type': 'application/json' };
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
-        return headers;
+        return token ? { Authorization: `Bearer ${token}` } : {};
       }
 
-      // Dynamic Google OAuth & Identity Services
-      async function initGoogleAuth() {
+      // App Navigation
+      function navigateTo(viewId, subTab) {
+        document.querySelectorAll('.app-view').forEach((v) => v.classList.remove('active'));
+        const target = document.getElementById(
+          viewId === 'home'
+            ? 'viewHome'
+            : viewId === 'login'
+              ? 'viewLogin'
+              : viewId === 'onboarding'
+                ? 'viewOnboarding'
+                : 'viewDashboard'
+        );
+        if (target) target.classList.add('active');
+
+        if (viewId === 'dashboard') {
+          if (subTab === 'settings') {
+            switchDashTab('settings');
+          } else {
+            switchDashTab('schedule');
+          }
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      function switchDashTab(tab) {
+        const schedTab = document.getElementById('dashTabContentSchedule');
+        const setTab = document.getElementById('dashTabContentSettings');
+        const btnSched = document.getElementById('tabBtnSchedule');
+        const btnSet = document.getElementById('tabBtnSettings');
+        const filterBar = document.getElementById('scheduleFilterBar');
+
+        if (tab === 'settings') {
+          schedTab.style.display = 'none';
+          setTab.style.display = 'block';
+          btnSched.classList.remove('active');
+          btnSet.classList.add('active');
+          filterBar.style.display = 'none';
+          populateSettingsForm();
+        } else {
+          schedTab.style.display = 'block';
+          setTab.style.display = 'none';
+          btnSched.classList.add('active');
+          btnSet.classList.remove('active');
+          filterBar.style.display = 'flex';
+          renderSlotsTimeline();
+        }
+      }
+
+      // Initialize on load
+      window.addEventListener('DOMContentLoaded', async () => {
+        initDatePicker();
+        renderDoctorInputs(1, 'obDoctorContainer');
+        await loadAuthConfig();
+        await checkSession();
+      });
+
+      function initDatePicker() {
+        const picker = document.getElementById('dashDatePicker');
+        if (picker && !picker.value) {
+          picker.value = new Date().toISOString().split('T')[0];
+        }
+      }
+
+      // Google OAuth GIS initialization
+      async function loadAuthConfig() {
         try {
           const res = await fetch('/api/config/auth');
           if (res.ok) {
-            const config = await res.json();
-            const clientId = config.googleClientId;
-            const hasGoogle = config.hasGoogleAuth;
-
-            const missingNotice = document.getElementById('googleMissingNotice');
-            if (hasGoogle && clientId) {
-              if (missingNotice) missingNotice.style.display = 'none';
-              if (!window.google || !window.google.accounts) {
-                const script = document.createElement('script');
-                script.src = 'https://accounts.google.com/gsi/client';
-                script.async = true;
-                script.defer = true;
-                script.onload = () => renderGsiButton(clientId);
-                document.head.appendChild(script);
-              } else {
-                renderGsiButton(clientId);
-              }
-            } else {
-              if (missingNotice) missingNotice.style.display = 'block';
+            const data = await res.json();
+            if (data.hasGoogleAuth && data.googleClientId) {
+              renderGoogleButton(data.googleClientId);
             }
           }
-        } catch (err) {
-          console.warn('Could not load auth configuration:', err);
+        } catch (e) {
+          console.warn('Could not load auth config:', e);
         }
       }
 
-      function renderGsiButton(clientId) {
+      function renderGoogleButton(clientId) {
         if (window.google && window.google.accounts && window.google.accounts.id) {
           google.accounts.id.initialize({
             client_id: clientId,
-            callback: handleGoogleCredentialResponse,
+            callback: handleGoogleResponse,
           });
           const container = document.getElementById('g_id_signin');
           if (container) {
@@ -2185,140 +1103,119 @@
         }
       }
 
-      async function handleGoogleCredentialResponse(response) {
+      async function handleGoogleResponse(resp) {
         try {
           const res = await fetch('/api/auth/google', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ credential: response.credential }),
+            body: JSON.stringify({ credential: resp.credential }),
           });
           const data = await res.json();
           if (data.token) {
             setAuthToken(data.token);
             currentDoctor = data.doctor;
-            closeAuthModal();
-            updateDoctorProfileUI();
-            await checkClinicOnboarding();
-            await fetchStats();
+            await checkClinicStatus();
           } else {
-            alert('Google login failed: ' + (data.message || 'Unauthorized'));
+            alert('Google sign-in error: ' + (data.message || 'Unauthorized'));
           }
-        } catch (err) {
-          console.error('Google auth error:', err);
-          alert('Network error during Google authentication');
+        } catch (e) {
+          console.error(e);
+          alert('Network error signing in with Google.');
         }
       }
 
-      async function doctorDevLogin(identifier) {
+      async function quickLogin() {
         try {
           const res = await fetch('/api/auth/dev-login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ doctorId: identifier }),
+            body: JSON.stringify({ doctorId: 'doctor' }),
           });
           const data = await res.json();
           if (data.token) {
             setAuthToken(data.token);
             currentDoctor = data.doctor;
-            closeAuthModal();
-            updateDoctorProfileUI();
-            await checkClinicOnboarding();
-            await fetchStats();
+            await checkClinicStatus();
           } else {
-            alert('Login failed: ' + (data.message || 'Unknown error'));
+            alert('Login failed.');
           }
-        } catch (err) {
-          console.error('Dev login error:', err);
-          alert('Network error during login');
+        } catch (e) {
+          console.error(e);
+          alert('Network error logging in.');
         }
       }
 
-      // Check current doctor profile & onboarding status
-      async function checkAuthSession() {
+      function logout() {
+        removeAuthToken();
+        currentDoctor = null;
+        if (sseConnection) sseConnection.close();
+        document.getElementById('doctorNavChip').style.display = 'none';
+        document.getElementById('navLoginBtn').style.display = 'inline-flex';
+        navigateTo('home');
+      }
+
+      async function checkSession() {
         const token = getAuthToken();
-        if (!token) {
-          openAuthModal();
-          return;
-        }
+        if (!token) return;
 
         try {
           const res = await fetch('/api/auth/me', { headers: authHeaders() });
           if (res.ok) {
             const data = await res.json();
             currentDoctor = data.doctor;
-            updateDoctorProfileUI();
-            await checkClinicOnboarding();
+            await checkClinicStatus();
           } else {
-            openAuthModal();
+            removeAuthToken();
           }
-        } catch (err) {
-          console.warn('Auth check error:', err);
-          openAuthModal();
+        } catch (e) {
+          console.warn('Session check error:', e);
         }
       }
 
-      function updateDoctorProfileUI() {
-        if (!currentDoctor) return;
-        const avatar = document.getElementById('docAvatar');
-        const name = document.getElementById('docName');
-        const specialty = document.getElementById('docSpecialty');
-        if (avatar) avatar.textContent = currentDoctor.name ? currentDoctor.name.charAt(0) : '👨‍⚕️';
-        if (name) name.textContent = currentDoctor.name || 'Doctor';
-        if (specialty) specialty.textContent = currentDoctor.specialty || 'OPD Specialist';
-
-        // Also update brand subtitle with actual clinic name
-        if (cachedClinicProfile && cachedClinicProfile.clinicName) {
-          const brandSub = document.getElementById('brandSubtitle');
-          if (brandSub) brandSub.textContent = cachedClinicProfile.clinicName + ' • Doctor OPD Dashboard';
-        }
-      }
-
-      // Check if clinic needs one-time initial setup
-      async function checkClinicOnboarding() {
+      // Check if clinic needs first-time onboarding
+      async function checkClinicStatus() {
         try {
           const res = await fetch('/api/clinic/profile', { headers: authHeaders() });
           if (res.ok) {
             const data = await res.json();
-            cachedClinicProfile = data.profile || {};
-            if (Array.isArray(data.doctors) && data.doctors.length > 0) {
-              cachedDoctors = data.doctors;
-            }
-            const isOnboarded =
-              cachedClinicProfile.onboardingCompleted ||
-              localStorage.getItem('appointly_clinic_onboarded') === 'true';
+            cachedProfile = data.profile || {};
+            cachedDoctors = data.doctors || [];
 
+            updateNavProfile();
+
+            const isOnboarded = cachedProfile.onboardingCompleted || Boolean(cachedProfile.clinicName);
             if (!isOnboarded) {
-              openClinicOnboardingModal(cachedClinicProfile, cachedDoctors);
+              navigateTo('onboarding');
+            } else {
+              initRealtimeSSE();
+              await loadAppointments();
+              populateDoctorFilter();
+              navigateTo('dashboard');
             }
           }
-        } catch (err) {
-          console.warn('Error checking clinic onboarding:', err);
+        } catch (e) {
+          console.error('Error checking clinic status:', e);
         }
       }
 
-      function openClinicOnboardingModal(profile, doctors) {
-        if (profile) {
-          if (profile.clinicName) document.getElementById('obClinicName').value = profile.clinicName;
-          if (profile.clinicPhone) document.getElementById('obClinicPhone').value = profile.clinicPhone;
-          if (profile.clinicAddress) document.getElementById('obClinicAddress').value = profile.clinicAddress;
-          if (profile.openingTime) document.getElementById('obOpeningTime').value = profile.openingTime;
-          if (profile.closingTime) document.getElementById('obClosingTime').value = profile.closingTime;
+      function updateNavProfile() {
+        document.getElementById('doctorNavChip').style.display = 'flex';
+        document.getElementById('navLoginBtn').style.display = 'none';
+        if (currentDoctor) {
+          document.getElementById('navDocName').textContent = currentDoctor.name;
         }
-        const count = (doctors && doctors.length > 0) ? doctors.length : 1;
-        document.getElementById('obDoctorCountSelect').value = String(count);
-        renderOnboardingDoctorCards(count);
-        document.getElementById('clinicOnboardingModal').style.display = 'flex';
+        if (cachedProfile && cachedProfile.clinicName) {
+          document.getElementById('navBrandSubtitle').textContent = cachedProfile.clinicName;
+        }
       }
 
-      function closeClinicOnboardingModal() {
-        document.getElementById('clinicOnboardingModal').style.display = 'none';
-      }
-
-      function renderOnboardingDoctorCards(count) {
-        const container = document.getElementById('obDoctorCardsContainer');
+      // Render Dynamic Doctor Input Fields (for onboarding & settings)
+      function renderDoctorInputs(count, containerId) {
+        const container = document.getElementById(containerId);
         if (!container) return;
         const n = parseInt(count, 10) || 1;
         let html = '';
+
         for (let i = 0; i < n; i++) {
           const doc = (cachedDoctors && cachedDoctors[i]) || {
             name: '',
@@ -2328,45 +1225,46 @@
             durationMinutes: 30,
             fee: 500,
           };
+
           html += `
-            <div class="doc-setup-card">
-              <div style="font-size: 0.78rem; font-weight: 700; color: var(--primary); margin-bottom: 8px;">
+            <div class="doctor-entry-box">
+              <div style="font-size: 0.82rem; font-weight: 700; color: var(--primary); margin-bottom: 10px;">
                 Doctor #${i + 1}
               </div>
               <div class="form-grid-2">
                 <div class="form-group">
-                  <label>Doctor Full Name</label>
-                  <input type="text" class="chat-input ob-doc-name" placeholder="e.g. Dr. Your Name" value="${escapeHtml(doc.name || '')}" required />
+                  <label>Doctor Full Name *</label>
+                  <input type="text" class="input-ctrl doc-input-name" placeholder="e.g. Dr. Your Name" value="${escapeHtml(doc.name || '')}" required />
                 </div>
                 <div class="form-group">
-                  <label>Specialty</label>
-                  <input type="text" class="chat-input ob-doc-specialty" placeholder="e.g. General Physician" value="${escapeHtml(doc.specialty || '')}" required />
+                  <label>Specialty *</label>
+                  <input type="text" class="input-ctrl doc-input-specialty" placeholder="e.g. General Physician" value="${escapeHtml(doc.specialty || '')}" required />
                 </div>
               </div>
               <div class="form-grid-2">
                 <div class="form-group">
                   <label>OPD Start Time</label>
-                  <input type="time" class="chat-input ob-doc-start" value="${doc.workingHoursStart || '09:00'}" required />
+                  <input type="time" class="input-ctrl doc-input-start" value="${doc.workingHoursStart || '09:00'}" required />
                 </div>
                 <div class="form-group">
                   <label>OPD End Time</label>
-                  <input type="time" class="chat-input ob-doc-end" value="${doc.workingHoursEnd || '17:00'}" required />
+                  <input type="time" class="input-ctrl doc-input-end" value="${doc.workingHoursEnd || '17:00'}" required />
                 </div>
               </div>
               <div class="form-grid-2">
                 <div class="form-group">
+                  <label>Consultation Fee (₹ INR)</label>
+                  <input type="number" class="input-ctrl doc-input-fee" value="${doc.fee || 500}" min="0" step="50" required />
+                </div>
+                <div class="form-group">
                   <label>Slot Duration</label>
-                  <select class="chat-input ob-doc-duration">
+                  <select class="input-ctrl doc-input-duration">
                     <option value="15" ${doc.durationMinutes === 15 ? 'selected' : ''}>15 Minutes</option>
                     <option value="20" ${doc.durationMinutes === 20 ? 'selected' : ''}>20 Minutes</option>
-                    <option value="30" ${doc.durationMinutes === 30 || !doc.durationMinutes ? 'selected' : ''}>30 Minutes</option>
+                    <option value="30" ${(!doc.durationMinutes || doc.durationMinutes === 30) ? 'selected' : ''}>30 Minutes</option>
                     <option value="45" ${doc.durationMinutes === 45 ? 'selected' : ''}>45 Minutes</option>
                     <option value="60" ${doc.durationMinutes === 60 ? 'selected' : ''}>60 Minutes</option>
                   </select>
-                </div>
-                <div class="form-group">
-                  <label>Consultation Fee (₹ INR)</label>
-                  <input type="number" class="chat-input ob-doc-fee" value="${doc.fee || 500}" required />
                 </div>
               </div>
             </div>
@@ -2375,7 +1273,8 @@
         container.innerHTML = html;
       }
 
-      async function submitClinicOnboarding(e) {
+      // Submit First-Time Setup
+      async function submitOnboarding(e) {
         if (e) e.preventDefault();
 
         const clinicName = document.getElementById('obClinicName').value.trim();
@@ -2384,16 +1283,16 @@
         const openingTime = document.getElementById('obOpeningTime').value;
         const closingTime = document.getElementById('obClosingTime').value;
 
-        const docCards = document.querySelectorAll('#obDoctorCardsContainer .doc-setup-card');
+        const boxes = document.querySelectorAll('#obDoctorContainer .doctor-entry-box');
         const doctors = [];
-        docCards.forEach((card, idx) => {
-          const name = card.querySelector('.ob-doc-name').value.trim();
-          const specialty = card.querySelector('.ob-doc-specialty').value.trim();
-          const start = card.querySelector('.ob-doc-start').value;
-          const end = card.querySelector('.ob-doc-end').value;
-          const duration = parseInt(card.querySelector('.ob-doc-duration').value, 10);
-          const fee = parseFloat(card.querySelector('.ob-doc-fee').value);
-          const id = `dr_${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+        boxes.forEach((box, idx) => {
+          const name = box.querySelector('.doc-input-name').value.trim();
+          const specialty = box.querySelector('.doc-input-specialty').value.trim();
+          const start = box.querySelector('.doc-input-start').value;
+          const end = box.querySelector('.doc-input-end').value;
+          const fee = parseFloat(box.querySelector('.doc-input-fee').value);
+          const duration = parseInt(box.querySelector('.doc-input-duration').value, 10);
+          const id = `dr_${name.toLowerCase().replace(/[^a-z0-9]/g, '_') || idx + 1}`;
 
           doctors.push({
             id,
@@ -2410,7 +1309,7 @@
         try {
           const res = await fetch('/api/clinic/onboarding', {
             method: 'POST',
-            headers: authHeaders(),
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
             body: JSON.stringify({
               clinicName,
               clinicPhone,
@@ -2422,96 +1321,39 @@
           });
 
           if (res.ok) {
-            localStorage.setItem('appointly_clinic_onboarded', 'true');
-            closeClinicOnboardingModal();
-            await fetchStats();
-            updateDoctorProfileUI();
+            const data = await res.json();
+            cachedProfile = data.profile || {};
+            cachedDoctors = data.doctors || [];
+            updateNavProfile();
+            initRealtimeSSE();
+            await loadAppointments();
+            populateDoctorFilter();
+            navigateTo('dashboard');
           } else {
             const err = await res.json();
-            alert('Could not save clinic setup: ' + (err.message || err.error));
+            alert('Setup failed: ' + (err.message || err.error));
           }
         } catch (err) {
-          console.error('Onboarding save error:', err);
+          console.error(err);
           alert('Network error saving clinic setup.');
         }
       }
 
-      // Settings Configuration Tab Handlers
-      function populateSettingsTab() {
-        const profile = cachedClinicProfile || {};
-        document.getElementById('setClinicName').value = profile.clinicName || '';
-        document.getElementById('setClinicPhone').value = profile.clinicPhone || '';
-        document.getElementById('setClinicAddress').value = profile.clinicAddress || '';
-        document.getElementById('setOpeningTime').value = profile.openingTime || '09:00';
-        document.getElementById('setClosingTime').value = profile.closingTime || '18:00';
+      // Settings Population & Update
+      function populateSettingsForm() {
+        if (!cachedProfile) return;
+        document.getElementById('setClinicName').value = cachedProfile.clinicName || '';
+        document.getElementById('setClinicPhone').value = cachedProfile.clinicPhone || '';
+        document.getElementById('setClinicAddress').value = cachedProfile.clinicAddress || '';
+        document.getElementById('setOpeningTime').value = cachedProfile.openingTime || '09:00';
+        document.getElementById('setClosingTime').value = cachedProfile.closingTime || '18:00';
 
-        const docs = (cachedDoctors && cachedDoctors.length > 0) ? cachedDoctors : [];
-        const count = Math.min(5, Math.max(1, docs.length || 1));
+        const count = Math.min(5, Math.max(1, cachedDoctors.length || 1));
         document.getElementById('setDoctorCountSelect').value = String(count);
-        renderSettingsDoctorCards(count);
+        renderDoctorInputs(count, 'setDoctorContainer');
       }
 
-      function renderSettingsDoctorCards(count) {
-        const container = document.getElementById('setDoctorCardsContainer');
-        if (!container) return;
-        const n = parseInt(count, 10) || 1;
-        let html = '';
-        for (let i = 0; i < n; i++) {
-          const doc = (cachedDoctors && cachedDoctors[i]) || {
-            name: '',
-            specialty: '',
-            workingHoursStart: '09:00',
-            workingHoursEnd: '17:00',
-            durationMinutes: 30,
-            fee: 500,
-          };
-          html += `
-            <div class="doc-setup-card">
-              <div style="font-size: 0.78rem; font-weight: 700; color: var(--primary); margin-bottom: 8px;">
-                Doctor #${i + 1}
-              </div>
-              <div class="form-grid-2">
-                <div class="form-group">
-                  <label>Doctor Full Name</label>
-                  <input type="text" class="chat-input set-doc-name" value="${escapeHtml(doc.name)}" required />
-                </div>
-                <div class="form-group">
-                  <label>Specialty</label>
-                  <input type="text" class="chat-input set-doc-specialty" value="${escapeHtml(doc.specialty)}" required />
-                </div>
-              </div>
-              <div class="form-grid-2">
-                <div class="form-group">
-                  <label>OPD Start Time</label>
-                  <input type="time" class="chat-input set-doc-start" value="${doc.workingHoursStart || '09:00'}" required />
-                </div>
-                <div class="form-group">
-                  <label>OPD End Time</label>
-                  <input type="time" class="chat-input set-doc-end" value="${doc.workingHoursEnd || '17:00'}" required />
-                </div>
-              </div>
-              <div class="form-grid-2">
-                <div class="form-group">
-                  <label>Slot Duration</label>
-                  <select class="chat-input set-doc-duration">
-                    <option value="15" ${doc.durationMinutes === 15 ? 'selected' : ''}>15 Minutes</option>
-                    <option value="20" ${doc.durationMinutes === 20 ? 'selected' : ''}>20 Minutes</option>
-                    <option value="30" ${doc.durationMinutes === 30 || !doc.durationMinutes ? 'selected' : ''}>30 Minutes</option>
-                    <option value="45" ${doc.durationMinutes === 45 ? 'selected' : ''}>45 Minutes</option>
-                  </select>
-                </div>
-                <div class="form-group">
-                  <label>Consultation Fee (₹ INR)</label>
-                  <input type="number" class="chat-input set-doc-fee" value="${doc.fee || 500}" required />
-                </div>
-              </div>
-            </div>
-          `;
-        }
-        container.innerHTML = html;
-      }
-
-      async function submitClinicSettings(e) {
+      async function submitSettingsUpdate(e) {
         if (e) e.preventDefault();
 
         const clinicName = document.getElementById('setClinicName').value.trim();
@@ -2520,16 +1362,16 @@
         const openingTime = document.getElementById('setOpeningTime').value;
         const closingTime = document.getElementById('setClosingTime').value;
 
-        const docCards = document.querySelectorAll('#setDoctorCardsContainer .doc-setup-card');
+        const boxes = document.querySelectorAll('#setDoctorContainer .doctor-entry-box');
         const doctors = [];
-        docCards.forEach((card, idx) => {
-          const name = card.querySelector('.set-doc-name').value.trim();
-          const specialty = card.querySelector('.set-doc-specialty').value.trim();
-          const start = card.querySelector('.set-doc-start').value;
-          const end = card.querySelector('.set-doc-end').value;
-          const duration = parseInt(card.querySelector('.set-doc-duration').value, 10);
-          const fee = parseFloat(card.querySelector('.set-doc-fee').value);
-          const id = `dr_${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+        boxes.forEach((box, idx) => {
+          const name = box.querySelector('.doc-input-name').value.trim();
+          const specialty = box.querySelector('.doc-input-specialty').value.trim();
+          const start = box.querySelector('.doc-input-start').value;
+          const end = box.querySelector('.doc-input-end').value;
+          const fee = parseFloat(box.querySelector('.doc-input-fee').value);
+          const duration = parseInt(box.querySelector('.doc-input-duration').value, 10);
+          const id = `dr_${name.toLowerCase().replace(/[^a-z0-9]/g, '_') || idx + 1}`;
 
           doctors.push({
             id,
@@ -2546,7 +1388,7 @@
         try {
           const res = await fetch('/api/clinic/settings', {
             method: 'PUT',
-            headers: authHeaders(),
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
             body: JSON.stringify({
               clinicName,
               clinicPhone,
@@ -2558,521 +1400,76 @@
           });
 
           if (res.ok) {
-            alert('Clinic profile & doctor schedule updated successfully!');
-            await fetchStats();
+            const data = await res.json();
+            cachedProfile = data.profile || {};
+            cachedDoctors = data.doctors || [];
+            updateNavProfile();
+            populateDoctorFilter();
+            alert('Clinic settings updated successfully!');
+            switchDashTab('schedule');
           } else {
-            const err = await res.json();
-            alert('Could not update settings: ' + (err.message || err.error));
+            alert('Failed to update settings.');
           }
         } catch (err) {
-          console.error('Settings update error:', err);
-          alert('Network error updating settings.');
+          console.error(err);
+          alert('Network error saving settings.');
         }
       }
 
-      // Appointment Dossier Modal on Click
-      function openAppointmentDetails(aptId) {
-        const apt = cachedAppointments.find((a) => a.id === aptId);
-        if (!apt) return;
-
-        const content = document.getElementById('aptDetailContent');
-        const actions = document.getElementById('aptDetailActions');
-        const canAction = apt.status === 'CONFIRMED' || apt.status === 'RESCHEDULED';
-
-        content.innerHTML = `
-          <div class="dossier-grid">
-            <div class="dossier-item">
-              <span class="dossier-label">Patient Name</span>
-              <span class="dossier-val">${escapeHtml(apt.patientName)}</span>
-            </div>
-            <div class="dossier-item">
-              <span class="dossier-label">Contact Number</span>
-              <span class="dossier-val">📞 ${escapeHtml(apt.patientPhoneMasked || apt.patientPhone)}</span>
-            </div>
-            <div class="dossier-item">
-              <span class="dossier-label">Appointment ID</span>
-              <span class="dossier-val"><code>${escapeHtml(apt.id)}</code></span>
-            </div>
-            <div class="dossier-item">
-              <span class="dossier-label">Status</span>
-              <span class="dossier-val"><span class="status-pill ${apt.status}">${apt.status}</span></span>
-            </div>
-            <div class="dossier-item">
-              <span class="dossier-label">Assigned Doctor</span>
-              <span class="dossier-val">👨‍⚕️ ${escapeHtml(apt.doctorName || apt.doctorId)}</span>
-            </div>
-            <div class="dossier-item">
-              <span class="dossier-label">Date & Time</span>
-              <span class="dossier-val">📅 ${apt.appointmentDate} at ${apt.startTime} (${apt.durationMinutes}m)</span>
-            </div>
-            <div class="dossier-item">
-              <span class="dossier-label">Visit Type</span>
-              <span class="dossier-val">${escapeHtml(apt.visitType || 'General Consultation')}</span>
-            </div>
-            <div class="dossier-item">
-              <span class="dossier-label">Reason for Visit</span>
-              <span class="dossier-val">${escapeHtml(apt.reason || 'OPD Checkup')}</span>
-            </div>
-          </div>
-
-          ${
-            apt.aiSummary
-              ? `
-            <div class="apt-ai-summary-box" style="margin-top: 10px; background: #faf5ff; border: 1px solid #e9d5ff; padding: 12px; border-radius: 8px;">
-              <strong style="color: #6b21a8;">🤖 AI Call Summary (Patient's Words, Non-Diagnostic):</strong>
-              <p style="margin-top: 6px; font-size: 0.85rem; color: #4c1d95; line-height: 1.45;">${escapeHtml(apt.aiSummary)}</p>
-            </div>
-          `
-              : ''
-          }
-        `;
-
-        actions.innerHTML = `
-          ${
-            canAction
-              ? `
-            <button class="btn-action btn-reschedule" onclick="closeAppointmentDetailsModal(); openRescheduleModal('${apt.id}');" style="padding: 10px 20px; font-weight: 700; font-size: 0.9rem; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 8px;">
-              🔄 Reschedule kar do
-            </button>
-            <button class="btn-action btn-cancel" onclick="cancelAppointment('${apt.id}'); closeAppointmentDetailsModal();" style="padding: 10px 20px; font-weight: 700; font-size: 0.9rem; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 8px;">
-              ❌ Cancel kar do
-            </button>
-          `
-              : `
-            <span style="font-size: 0.8rem; color: var(--text-muted); font-style: italic; align-self: center; margin-right: auto;">
-              Appointment status: <strong>${apt.status}</strong>
-            </span>
-          `
-          }
-          <button class="btn-action" onclick="closeAppointmentDetailsModal()" style="padding: 10px 18px; border-radius: 8px;">Close</button>
-        `;
-
-        document.getElementById('appointmentDetailsModal').style.display = 'flex';
-      }
-
-      function closeAppointmentDetailsModal() {
-        document.getElementById('appointmentDetailsModal').style.display = 'none';
-      }
-
-      function openAuthModal() {
-        document.getElementById('authModal').style.display = 'flex';
-      }
-
-      function closeAuthModal() {
-        document.getElementById('authModal').style.display = 'none';
-      }
-
-      // Fetch Stats & Core Records
-      async function fetchStats() {
-        try {
-          const [aptRes, docRes, cbRes, costRes] = await Promise.all([
-            fetch('/api/appointments', { headers: authHeaders() }),
-            fetch('/api/doctors'),
-            fetch('/api/callbacks', { headers: authHeaders() }),
-            fetch('/api/cost'),
-          ]);
-
-          if (aptRes.status === 401) {
-            openAuthModal();
-            return;
-          }
-
-          const appointments = aptRes.ok ? await aptRes.json() : [];
-          const doctors = docRes.ok ? await docRes.json() : [];
-          const callbacks = cbRes.ok ? await cbRes.json() : [];
-          const cost = costRes.ok
-            ? await costRes.json()
-            : { remainingCredits: 5000, totalCreditsUsed: 0, budgetCredits: 5000 };
-
-          cachedAppointments = appointments;
-          cachedDoctors = doctors;
-          cachedCallbacks = callbacks;
-
-          // Today's Date in IST (YYYY-MM-DD)
-          const todayIso = new Date().toISOString().split('T')[0];
-          const todayCount = appointments.filter((a) => a.appointmentDate === todayIso).length;
-
-          document.getElementById('countTodayApts').textContent = todayCount;
-          document.getElementById('countTotalApts').textContent = appointments.length;
-          document.getElementById('countDoctors').textContent = doctors.length;
-          document.getElementById('countCallbacks').textContent = callbacks.length;
-          document.getElementById('tabBadgeCards').textContent = appointments.length;
-          document.getElementById('tabBadgeCallbacks').textContent = callbacks.length;
-
-          // Evon AI Credits Meter
-          document.getElementById('creditsRemaining').textContent = Number(
-            cost.remainingCredits
-          ).toLocaleString();
-          document.getElementById('creditsUsageMeta').textContent =
-            `Budget: 5,000 credits (${cost.totalCreditsUsed} used)`;
-          const pct = Math.max(0, Math.min(100, (cost.remainingCredits / 5000) * 100));
-          document.getElementById('creditProgressBar').style.width = `${pct}%`;
-
-          renderAppointments();
-          renderCallbacks();
-          populateDoctorSelect(doctors);
-          renderDayViewTimeline();
-          fetchCallSummaries();
-        } catch (err) {
-          console.error('Error fetching dashboard stats:', err);
-        }
-      }
-
-      // Tab Switching
-      function switchTab(tabId) {
-        activeTab = tabId;
-        ['Cards', 'DayView', 'Callbacks', 'Summaries', 'Observability', 'Settings'].forEach((t) => {
-          const btn = document.getElementById(`tabBtn${t}`);
-          const content = document.getElementById(`tabContent${t}`);
-          if (btn && content) {
-            if (t.toLowerCase() === tabId.toLowerCase()) {
-              btn.classList.add('active');
-              content.style.display = 'block';
-            } else {
-              btn.classList.remove('active');
-              content.style.display = 'none';
-            }
-          }
+      // Populate doctor switcher in schedule tab
+      function populateDoctorFilter() {
+        const select = document.getElementById('dashDoctorSelect');
+        if (!select) return;
+        select.innerHTML = '';
+        cachedDoctors.forEach((doc) => {
+          const opt = document.createElement('option');
+          opt.value = doc.id;
+          opt.textContent = `${doc.name} (${doc.specialty})`;
+          select.appendChild(opt);
         });
-
-        if (tabId === 'dayview') {
-          renderDayViewTimeline();
-        } else if (tabId === 'summaries') {
-          renderCallSummaries();
-        } else if (tabId === 'observability') {
-          fetchMetricsAndAlerts();
-        } else if (tabId === 'settings') {
-          populateSettingsTab();
-        }
-      }
       }
 
-      async function fetchMetricsAndAlerts() {
+      // Load appointments from API
+      async function loadAppointments() {
         try {
-          const [metricsRes, alertsRes] = await Promise.all([
-            fetch('/api/metrics'),
-            fetch('/api/alerts'),
-          ]);
-
-          if (metricsRes.ok) {
-            const data = await metricsRes.json();
-            // SLO
-            const availActual = data.slo.availability_actual_percent;
-            const availStatus = data.slo.availability_status;
-            const elAvailActual = document.getElementById('sloAvailActual');
-            const elAvailBadge = document.getElementById('sloAvailBadge');
-            if (elAvailActual) elAvailActual.textContent = `${availActual}%`;
-            if (elAvailBadge) {
-              elAvailBadge.textContent = availStatus;
-              elAvailBadge.style.background = availStatus === 'MET' ? '#dcfce7' : '#fee2e2';
-              elAvailBadge.style.color = availStatus === 'MET' ? '#166534' : '#991b1b';
-            }
-
-            const p95Latency = data.slo.p95_turn_latency_ms;
-            const latencyStatus = data.slo.latency_slo_status;
-            const elLatencyActual = document.getElementById('sloLatencyActual');
-            const elLatencyBadge = document.getElementById('sloLatencyBadge');
-            if (elLatencyActual) elLatencyActual.textContent = p95Latency;
-            if (elLatencyBadge) {
-              elLatencyBadge.textContent = latencyStatus;
-              elLatencyBadge.style.background = latencyStatus === 'MET' ? '#dcfce7' : '#fee2e2';
-              elLatencyBadge.style.color = latencyStatus === 'MET' ? '#166534' : '#991b1b';
-            }
-
-            const elCredits = document.getElementById('metricAvgCredits');
-            if (elCredits) elCredits.textContent = data.credits.avg_credits_per_call.toFixed(2);
-
-            // Calls breakdown
-            const elCallsTotal = document.getElementById('metricCallsTotal');
-            const elCallsCompleted = document.getElementById('metricCallsCompleted');
-            const elCallsEmergency = document.getElementById('metricCallsEmergency');
-            const elCallsDropped = document.getElementById('metricCallsDropped');
-            if (elCallsTotal) elCallsTotal.textContent = data.calls.total;
-            if (elCallsCompleted) elCallsCompleted.textContent = data.calls.completed;
-            if (elCallsEmergency) elCallsEmergency.textContent = data.calls.emergency;
-            if (elCallsDropped) elCallsDropped.textContent = data.calls.dropped + data.calls.error;
-
-            // Funnel
-            const elBookingsSucceeded = document.getElementById('metricBookingsSucceeded');
-            const elBookingsFailed = document.getElementById('metricBookingsFailed');
-            const elReschedules = document.getElementById('metricReschedules');
-            const elCancels = document.getElementById('metricCancels');
-            const elConversion = document.getElementById('metricConversionRate');
-            if (elBookingsSucceeded) elBookingsSucceeded.textContent = data.bookings.succeeded;
-            if (elBookingsFailed) elBookingsFailed.textContent = data.bookings.failed;
-            if (elReschedules) elReschedules.textContent = data.reschedules.succeeded;
-            if (elCancels) elCancels.textContent = data.cancellations.succeeded;
-            if (elConversion)
-              elConversion.textContent = `${data.bookings.conversion_rate_percent}%`;
-
-            // Stage Latencies Table
-            const l = data.latencies;
-            const populateRow = (prefix, stats) => {
-              const elMin = document.getElementById(`${prefix}Min`);
-              const elP50 = document.getElementById(`${prefix}P50`);
-              const elP90 = document.getElementById(`${prefix}P90`);
-              const elP95 = document.getElementById(`${prefix}P95`);
-              const elMax = document.getElementById(`${prefix}Max`);
-              const elAvg = document.getElementById(`${prefix}Avg`);
-              if (elMin) elMin.textContent = stats.count > 0 ? stats.min : '-';
-              if (elP50) elP50.textContent = stats.count > 0 ? stats.p50 : '-';
-              if (elP90) elP90.textContent = stats.count > 0 ? stats.p90 : '-';
-              if (elP95) elP95.textContent = stats.count > 0 ? stats.p95 : '-';
-              if (elMax) elMax.textContent = stats.count > 0 ? stats.max : '-';
-              if (elAvg) elAvg.textContent = stats.count > 0 ? stats.avg : '-';
-            };
-            populateRow('latTurn', l.turn_total);
-            populateRow('latStt', l.stt);
-            populateRow('latLlm', l.llm_first_token);
-            populateRow('latTts', l.tts_first_audio);
-          }
-
-          if (alertsRes.ok) {
-            const alertsData = await alertsRes.json();
-            const container = document.getElementById('observabilityAlertsContainer');
-            if (container) {
-              if (alertsData.activeAlerts && alertsData.activeAlerts.length > 0) {
-                container.innerHTML = alertsData.activeAlerts
-                  .map(
-                    (a) => `
-                  <div style="background: #fef2f2; border-left: 4px solid var(--danger); border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; font-size: 0.82rem; color: #991b1b;">
-                    <strong>🚨 [${a.severity}] ${a.name}:</strong> ${a.message}
-                    <div style="font-size: 0.72rem; color: #b91c1c; margin-top: 3px;">Triggered at: ${new Date(a.triggeredAt).toLocaleTimeString('en-IN')} | Current Value: ${a.metricValue} (Threshold: ${a.thresholdValue})</div>
-                  </div>
-                `
-                  )
-                  .join('');
-              } else {
-                container.innerHTML = `
-                  <div style="background: #f0fdf4; border-left: 4px solid var(--accent); border-radius: 6px; padding: 10px 14px; font-size: 0.82rem; color: #166534;">
-                    <strong>✅ All Systems Nominal:</strong> Zero active alerts. System operating within 99.9% availability and &lt; 2,000ms latency boundaries.
-                  </div>
-                `;
-              }
-            }
+          const res = await fetch('/api/appointments', { headers: authHeaders() });
+          if (res.ok) {
+            cachedAppointments = await res.json();
+            renderSlotsTimeline();
           }
         } catch (e) {
-          console.warn('Error fetching metrics/alerts:', e);
+          console.warn('Could not load appointments:', e);
         }
       }
 
-      async function fetchCallSummaries() {
-        try {
-          const res = await fetch('/api/calls', { headers: authHeaders() });
-          if (res.ok) {
-            const summaries = await res.json();
-            cachedCallSummaries = summaries;
-            const badge = document.getElementById('tabBadgeSummaries');
-            if (badge) badge.textContent = summaries.length;
-            renderCallSummaries();
-          }
-        } catch (err) {
-          console.warn('Error fetching call summaries:', err);
-        }
-      }
+      // Render Schedule Slots Timeline: Khaali vs Bhara hua
+      function renderSlotsTimeline() {
+        const container = document.getElementById('slotsContainer');
+        const docSelect = document.getElementById('dashDoctorSelect');
+        const datePicker = document.getElementById('dashDatePicker');
+        if (!container || !docSelect || !datePicker) return;
 
-      function renderCallSummaries() {
-        const container = document.getElementById('callSummariesContainer');
-        if (!container) return;
+        const selectedDocId = docSelect.value;
+        const selectedDate = datePicker.value || new Date().toISOString().split('T')[0];
+        const doctor = cachedDoctors.find((d) => d.id === selectedDocId) || cachedDoctors[0];
 
-        if (cachedCallSummaries.length === 0) {
-          container.innerHTML = `
-            <div style="text-align: center; color: var(--text-muted); padding: 40px 0;">
-              No call summaries recorded yet.<br>
-              Completed voice calls will automatically generate doctor summaries here.
-            </div>
-          `;
+        if (!doctor) {
+          container.innerHTML = '<div style="padding: 24px; text-align: center; color: var(--text-muted);">Please add at least one doctor in settings.</div>';
           return;
         }
 
-        container.innerHTML = cachedCallSummaries
-          .map((s) => {
-            const outcomeColor =
-              s.outcome === 'BOOKED'
-                ? '#10b981'
-                : s.outcome === 'RESCHEDULED'
-                  ? '#3b82f6'
-                  : s.outcome === 'EMERGENCY_ESCALATED'
-                    ? '#ef4444'
-                    : s.outcome === 'CANCELLED'
-                      ? '#6b7280'
-                      : s.outcome === 'CALLBACK_SAVED'
-                        ? '#f59e0b'
-                        : '#8b5cf6';
+        // Header info
+        document.getElementById('timelineHeaderTitle').textContent = `${doctor.name} — Schedule`;
+        document.getElementById('timelineHoursMeta').textContent = `⏰ OPD: ${doctor.workingHoursStart} - ${doctor.workingHoursEnd}`;
 
-            const timeFormatted = new Date(s.createdAt).toLocaleString('en-IN', {
-              dateStyle: 'medium',
-              timeStyle: 'short',
-              timeZone: 'Asia/Kolkata',
-            });
-
-            return `
-            <div class="appointment-card" style="border-left: 4px solid ${outcomeColor};">
-              <div class="apt-card-top">
-                <div class="apt-patient-info">
-                  <div class="apt-patient-name">${escapeHtml(s.patientName)}</div>
-                  <div class="apt-patient-phone">📞 ${escapeHtml(s.patientPhoneMasked)} • ID: <code>${escapeHtml(s.callId)}</code></div>
-                </div>
-                <div class="status-pill" style="background: ${outcomeColor}20; color: ${outcomeColor}; border: 1px solid ${outcomeColor}50;">
-                  ${escapeHtml(s.outcome)}
-                </div>
-              </div>
-
-              <div class="apt-card-meta-grid" style="margin-top: 10px;">
-                <div class="apt-meta-item">
-                  <span class="apt-meta-label">Patient Verbatim Concern (Non-Diagnostic)</span>
-                  <span class="apt-meta-value" style="font-style: italic; color: #7e22ce;">${escapeHtml(s.concern)}</span>
-                </div>
-                <div class="apt-meta-item">
-                  <span class="apt-meta-label">Preferred Time</span>
-                  <span class="apt-meta-value">🕒 ${escapeHtml(s.preferredTime)}</span>
-                </div>
-                <div class="apt-meta-item">
-                  <span class="apt-meta-label">Doctor</span>
-                  <span class="apt-meta-value">👨‍⚕️ ${escapeHtml(s.doctorName || 'General OPD')}</span>
-                </div>
-                <div class="apt-meta-item">
-                  <span class="apt-meta-label">Recorded At</span>
-                  <span class="apt-meta-value">📅 ${timeFormatted}</span>
-                </div>
-              </div>
-
-              <div class="apt-ai-summary-box" style="margin-top: 12px; background: #faf5ff; border: 1px solid #e9d5ff;">
-                <strong style="color: #6b21a8;">🤖 AI Operational Summary:</strong> ${escapeHtml(s.aiSummary)}
-              </div>
-            </div>
-          `;
-          })
-          .join('');
-      }
-
-      // Filter handling
-      function setAptFilter(filter, el) {
-        activeFilter = filter;
-        document
-          .querySelectorAll('.filter-chips .chip')
-          .forEach((c) => c.classList.remove('active'));
-        if (el) el.classList.add('active');
-        renderAppointments();
-      }
-
-      // Render Rich Appointment Cards
-      function renderAppointments() {
-        const container = document.getElementById('appointmentsList');
-        if (!container) return;
-
-        const todayIso = new Date().toISOString().split('T')[0];
-        let filtered = [...cachedAppointments];
-
-        if (activeFilter === 'TODAY') {
-          filtered = filtered.filter((a) => a.appointmentDate === todayIso);
-        } else if (activeFilter !== 'ALL') {
-          filtered = filtered.filter((a) => a.status === activeFilter);
-        }
-
-        if (filtered.length === 0) {
-          container.innerHTML = `
-            <div style="text-align: center; color: var(--text-muted); padding: 50px 0;">
-              Koi matching appointment nahi mila.<br>
-              Use the live simulator or voice tester to book an appointment!
-            </div>
-          `;
-          return;
-        }
-
-        container.innerHTML = filtered
-          .map((apt) => {
-            const canAction = apt.status === 'CONFIRMED' || apt.status === 'RESCHEDULED';
-            return `
-            <div class="appointment-card status-${apt.status}" id="apt-${apt.id}" onclick="openAppointmentDetails('${apt.id}')" style="cursor: pointer;" title="Click to view full patient dossier">
-              <div class="apt-card-top">
-                <div class="apt-patient-info">
-                  <div class="apt-patient-name">${escapeHtml(apt.patientName)}</div>
-                  <div class="apt-patient-phone">📞 ${escapeHtml(apt.patientPhoneMasked || apt.patientPhone)}</div>
-                </div>
-                <div class="status-pill ${apt.status}">${apt.status}</div>
-              </div>
-
-              <div class="apt-card-meta-grid">
-                <div class="apt-meta-item">
-                  <span class="apt-meta-label">Doctor</span>
-                  <span class="apt-meta-value">${escapeHtml(apt.doctorName || apt.doctorId)}</span>
-                </div>
-                <div class="apt-meta-item">
-                  <span class="apt-meta-label">Date & Time</span>
-                  <span class="apt-meta-value">📅 ${apt.appointmentDate} at ${apt.startTime}</span>
-                </div>
-                <div class="apt-meta-item">
-                  <span class="apt-meta-label">Visit Type / Duration</span>
-                  <span class="apt-meta-value">${escapeHtml(apt.visitType || 'General Consultation')} (${apt.durationMinutes}m)</span>
-                </div>
-                <div class="apt-meta-item">
-                  <span class="apt-meta-label">Reason for Visit</span>
-                  <span class="apt-meta-value">${escapeHtml(apt.reason || 'Routine OPD checkup')}</span>
-                </div>
-              </div>
-
-              ${
-                apt.aiSummary
-                  ? `
-                <div class="apt-ai-summary-box">
-                  <strong>🤖 AI Call Summary:</strong> ${escapeHtml(apt.aiSummary)}
-                </div>
-              `
-                  : ''
-              }
-
-              <div class="apt-card-actions">
-                ${
-                  canAction
-                    ? `
-                  <button class="btn-action btn-complete" onclick="event.stopPropagation(); markAppointmentComplete('${apt.id}')">
-                    ✅ Complete Visit
-                  </button>
-                  <button class="btn-action btn-reschedule" onclick="event.stopPropagation(); openRescheduleModal('${apt.id}')">
-                    🔄 Reschedule
-                  </button>
-                  <button class="btn-action btn-cancel" onclick="event.stopPropagation(); cancelAppointment('${apt.id}')">
-                    ❌ Cancel
-                  </button>
-                `
-                    : `
-                  <span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">
-                    Appointment is ${apt.status.toLowerCase()}
-                  </span>
-                `
-                }
-              </div>
-            </div>
-          `;
-          })
-          .join('');
-      }
-
-      // Render Day OPD View Timeline
-      function renderDayViewTimeline() {
-        const grid = document.getElementById('dayTimelineGrid');
-        const picker = document.getElementById('dayViewDatePicker');
-        if (!picker.value) {
-          picker.value = new Date().toISOString().split('T')[0];
-        }
-
-        const selectedDate = picker.value;
-        const doctor = currentDoctor || cachedDoctors[0];
-        if (!doctor || !grid) return;
-
-        const dayViewNameEl = document.getElementById('dayViewDocName');
-        if (dayViewNameEl) dayViewNameEl.textContent = doctor.name || 'Doctor';
-
-        // Working hours
         const duration = doctor.durationMinutes || 30;
-        const [startH, startM] = (doctor.workingHoursStart || '09:00').split(':').map((v) => parseInt(v, 10));
-        const [endH, endM] = (doctor.workingHoursEnd || '21:00').split(':').map((v) => parseInt(v, 10));
-        const startMin = startH * 60 + (startM || 0);
-        const endMin = endH * 60 + (endM || 0);
+        const [sh, sm] = (doctor.workingHoursStart || '09:00').split(':').map(Number);
+        const [eh, em] = (doctor.workingHoursEnd || '17:00').split(':').map(Number);
+        const startMin = sh * 60 + sm;
+        const endMin = eh * 60 + em;
 
-        // Get appointments for this doctor & date
-        const dayApts = cachedAppointments.filter(
+        // Appointments for this doctor & date
+        const activeApts = cachedAppointments.filter(
           (a) =>
             (a.doctorId === doctor.id || a.doctorName === doctor.name) &&
             a.appointmentDate === selectedDate &&
@@ -3083,508 +1480,237 @@
         for (let m = startMin; m < endMin; m += duration) {
           const slotH = Math.floor(m / 60);
           const slotM = m % 60;
-          const slotTimeStr = `${slotH.toString().padStart(2, '0')}:${slotM.toString().padStart(2, '0')}`;
+          const slotTime = `${String(slotH).padStart(2, '0')}:${String(slotM).padStart(2, '0')}`;
           const nextM = m + duration;
-          const endSlotStr = `${Math.floor(nextM / 60).toString().padStart(2, '0')}:${(nextM % 60).toString().padStart(2, '0')}`;
+          const endSlot = `${String(Math.floor(nextM / 60)).padStart(2, '0')}:${String(nextM % 60).padStart(2, '0')}`;
 
-          const matchingApt = dayApts.find((a) => a.startTime === slotTimeStr);
+          const bookedApt = activeApts.find((a) => a.startTime === slotTime);
 
-          if (matchingApt) {
-            // Bhara hua / Booked Slot
+          if (bookedApt) {
+            // Bhara hua (Booked) Slot
             html += `
-              <div class="timeline-slot-row" style="background: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 8px; margin-bottom: 8px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;">
-                <div class="timeline-time-label" style="font-weight: 700; color: #1e40af; width: 140px;">
-                  ⏰ ${slotTimeStr} - ${endSlotStr}
-                </div>
-                <div style="flex: 1; display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="openAppointmentDetails('${matchingApt.id}')" title="Click to view patient info & actions">
-                  <div>
-                    <div style="font-weight: 700; font-size: 0.95rem; color: #1e3a8a;">
-                      🔴 ${escapeHtml(matchingApt.patientName)} <span style="font-size: 0.8rem; font-weight: normal; color: #3b82f6;">(📞 ${escapeHtml(matchingApt.patientPhoneMasked || matchingApt.patientPhone || 'Registered Phone')})</span>
-                    </div>
-                    <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
-                      Reason: ${escapeHtml(matchingApt.reason || 'General Consultation')} • Click to view details
-                    </div>
+              <div class="slot-item booked" onclick="openAppointmentDetails('${bookedApt.id}')" title="Click to view patient details">
+                <div class="slot-time">⏰ ${slotTime} - ${endSlot}</div>
+                <div class="slot-info">
+                  <div style="font-weight: 700; color: #1e3a8a; font-size: 0.95rem;">
+                    🔴 ${escapeHtml(bookedApt.patientName)}
+                    <span style="font-size: 0.82rem; font-weight: normal; color: #2563eb;">(📞 ${escapeHtml(bookedApt.patientPhoneMasked || bookedApt.patientPhone || '')})</span>
                   </div>
-                  <span style="background: #dbeafe; color: #1d4ed8; padding: 6px 12px; border-radius: 9999px; font-size: 0.75rem; font-weight: 700;">
-                    Bhara hua / Booked ↗
-                  </span>
+                  <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">
+                    Reason: ${escapeHtml(bookedApt.reason || 'Consultation')} • Click to view actions
+                  </div>
                 </div>
+                <span class="slot-status-tag tag-booked">
+                  Bhara hua / Booked ↗
+                </span>
               </div>
             `;
           } else {
-            // Khaali / Available Slot
+            // Khaali (Available) Slot
             html += `
-              <div class="timeline-slot-row" style="background: #f0fdf4; border-left: 4px solid #10b981; border-radius: 8px; margin-bottom: 8px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;">
-                <div class="timeline-time-label" style="font-weight: 600; color: #065f46; width: 140px;">
-                  ⏰ ${slotTimeStr} - ${endSlotStr}
-                </div>
-                <div style="flex: 1; display: flex; justify-content: space-between; align-items: center;">
-                  <div style="color: #047857; font-weight: 600; font-size: 0.88rem;">
+              <div class="slot-item available">
+                <div class="slot-time">⏰ ${slotTime} - ${endSlot}</div>
+                <div class="slot-info">
+                  <div style="font-weight: 600; color: #047857; font-size: 0.9rem;">
                     🟢 Khaali / Available Slot
                   </div>
-                  <span style="background: #dcfce7; color: #15803d; padding: 4px 10px; border-radius: 9999px; font-size: 0.72rem; font-weight: 600;">
-                    Open for Booking
-                  </span>
                 </div>
+                <span class="slot-status-tag tag-available">
+                  Open for Patients
+                </span>
               </div>
             `;
           }
         }
 
-        grid.innerHTML = html || '<div style="padding: 24px; text-align: center; color: var(--text-muted);">No working hours configured for this day.</div>';
+        container.innerHTML = html || '<div style="padding: 24px; text-align: center; color: var(--text-muted);">No slots configured for this time range.</div>';
       }
 
-      // Render Callbacks List
-      function renderCallbacks() {
-        const container = document.getElementById('callbacksContainer');
-        if (!container) return;
-
-        if (cachedCallbacks.length === 0) {
-          container.innerHTML = `
-            <div style="text-align: center; color: var(--text-muted); padding: 40px 0;">
-              🎉 Koi pending callback request nahi hai! Zero missed patients.
-            </div>
-          `;
-          return;
-        }
-
-        container.innerHTML = cachedCallbacks
-          .map(
-            (cb) => `
-          <div class="callback-item" id="cb-${cb.id}">
-            <div>
-              <div style="font-weight: 700; font-size: 0.9rem">📞 ${escapeHtml(cb.phone)}</div>
-              <div style="font-size: 0.8rem; color: var(--text-muted)">Reason: ${escapeHtml(cb.reason || 'Requested callback')}</div>
-              <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px">
-                Created: ${new Date(cb.createdAt).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })}
-              </div>
-            </div>
-            <button class="btn-action btn-complete" onclick="resolveCallback('${cb.id}')">
-              Mark Resolved
-            </button>
-          </div>
-        `
-          )
-          .join('');
-      }
-
-      // Mark Appointment Complete
-      async function markAppointmentComplete(id) {
-        try {
-          const res = await fetch(`/api/appointments/${id}/complete`, {
-            method: 'PUT',
-            headers: authHeaders(),
-          });
-          const data = await res.json();
-          if (res.ok && data.success) {
-            fetchStats();
-          } else {
-            alert('Failed to complete appointment: ' + (data.error || 'Server error'));
-          }
-        } catch (err) {
-          console.error('Error completing appointment:', err);
-        }
-      }
-
-      // Cancel Appointment
-      async function cancelAppointment(id) {
-        const reason = prompt(
-          'Please enter reason for cancellation:',
-          'Patient requested via phone'
-        );
-        if (reason === null) return;
-
-        try {
-          const res = await fetch(`/api/appointments/${id}/cancel`, {
-            method: 'PUT',
-            headers: authHeaders(),
-            body: JSON.stringify({ reason }),
-          });
-          const data = await res.json();
-          if (res.ok && data.success) {
-            fetchStats();
-          } else {
-            alert('Failed to cancel appointment: ' + (data.error || 'Server error'));
-          }
-        } catch (err) {
-          console.error('Error cancelling appointment:', err);
-        }
-      }
-
-      // Reschedule Modal Handlers
-      function openRescheduleModal(id) {
+      // Open Patient Details Modal
+      function openAppointmentDetails(id) {
         const apt = cachedAppointments.find((a) => a.id === id);
         if (!apt) return;
 
-        document.getElementById('rescheduleAptId').value = id;
-        document.getElementById('reschedulePatientName').textContent =
-          `Patient: ${apt.patientName} (${apt.patientPhoneMasked || apt.patientPhone})`;
-        document.getElementById('rescheduleNewDate').value = apt.appointmentDate;
+        const body = document.getElementById('modalDossierBody');
+        const footer = document.getElementById('modalDossierFooter');
+
+        body.innerHTML = `
+          <div class="dossier-row">
+            <span class="dossier-label">Patient Name</span>
+            <span class="dossier-val" style="font-size: 1.05rem; color: #1e3a8a;">${escapeHtml(apt.patientName)}</span>
+          </div>
+          <div class="dossier-row">
+            <span class="dossier-label">Phone Number</span>
+            <span class="dossier-val">📞 ${escapeHtml(apt.patientPhoneMasked || apt.patientPhone || 'Not provided')}</span>
+          </div>
+          <div class="dossier-row">
+            <span class="dossier-label">Consulting Doctor</span>
+            <span class="dossier-val">👨‍⚕️ ${escapeHtml(apt.doctorName || apt.doctorId)}</span>
+          </div>
+          <div class="dossier-row">
+            <span class="dossier-label">Date &amp; Time</span>
+            <span class="dossier-val">📅 ${apt.appointmentDate} at ${apt.startTime} (${apt.durationMinutes || 30} mins)</span>
+          </div>
+          <div class="dossier-row">
+            <span class="dossier-label">Reason for Visit</span>
+            <span class="dossier-val">${escapeHtml(apt.reason || 'General Consultation')}</span>
+          </div>
+          ${
+            apt.aiSummary
+              ? `
+            <div style="margin-top: 14px; background: #faf5ff; border: 1px solid #e9d5ff; padding: 12px; border-radius: 10px;">
+              <strong style="color: #6b21a8; font-size: 0.8rem;">🤖 Verbatim AI Call Summary:</strong>
+              <p style="font-size: 0.82rem; color: #4c1d95; margin-top: 4px; line-height: 1.45;">${escapeHtml(apt.aiSummary)}</p>
+            </div>
+          `
+              : ''
+          }
+        `;
+
+        // Strictly Two Action Buttons: Reschedule kar do / Cancel kar do
+        footer.innerHTML = `
+          <button class="btn btn-reschedule" onclick="openRescheduleModal('${apt.id}')">
+            🔄 Reschedule kar do
+          </button>
+          <button class="btn btn-cancel" onclick="cancelAppointment('${apt.id}')">
+            ❌ Cancel kar do
+          </button>
+          <button class="btn btn-outline" onclick="closeAppointmentModal()">
+            Close
+          </button>
+        `;
+
+        document.getElementById('modalAppointmentDetails').style.display = 'flex';
+      }
+
+      function closeAppointmentModal() {
+        document.getElementById('modalAppointmentDetails').style.display = 'none';
+      }
+
+      // Reschedule Flow
+      function openRescheduleModal(id) {
+        closeAppointmentModal();
+        const apt = cachedAppointments.find((a) => a.id === id);
+        if (!apt) return;
+
+        document.getElementById('reschedAptId').value = id;
+        document.getElementById('reschedNewDate').value = apt.appointmentDate;
         loadRescheduleSlots();
-        document.getElementById('rescheduleModal').style.display = 'flex';
+        document.getElementById('modalReschedulePicker').style.display = 'flex';
       }
 
       function closeRescheduleModal() {
-        document.getElementById('rescheduleModal').style.display = 'none';
+        document.getElementById('modalReschedulePicker').style.display = 'none';
       }
 
       async function loadRescheduleSlots() {
-        const aptId = document.getElementById('rescheduleAptId').value;
-        const apt = cachedAppointments.find((a) => a.id === aptId);
-        const date = document.getElementById('rescheduleNewDate').value;
-        const select = document.getElementById('rescheduleNewSlot');
-        select.innerHTML = '<option value="">Loading slots...</option>';
+        const id = document.getElementById('reschedAptId').value;
+        const apt = cachedAppointments.find((a) => a.id === id);
+        if (!apt) return;
 
-        if (!apt || !date) return;
+        const date = document.getElementById('reschedNewDate').value;
+        const select = document.getElementById('reschedNewSlot');
+        select.innerHTML = '<option>Loading slots...</option>';
 
         try {
-          const res = await fetch(`/api/doctors/${apt.doctorId}/slots?date=${date}`);
-          const data = await res.json();
-          const slots = data.availableSlots || [];
-          if (slots.length === 0) {
-            select.innerHTML = '<option value="">No slots available on this date</option>';
-            return;
+          const res = await fetch(`/api/slots?doctorId=${encodeURIComponent(apt.doctorId)}&date=${encodeURIComponent(date)}`);
+          if (res.ok) {
+            const data = await res.json();
+            const slots = data.availableSlots || [];
+            if (slots.length === 0) {
+              select.innerHTML = '<option value="">No open slots for this date</option>';
+            } else {
+              select.innerHTML = slots.map((s) => `<option value="${s}">${s}</option>`).join('');
+            }
           }
-          select.innerHTML = slots.map((s) => `<option value="${s}">${s}</option>`).join('');
-        } catch (err) {
-          select.innerHTML = '<option value="">Error loading slots</option>';
+        } catch (e) {
+          console.error(e);
         }
       }
 
       async function submitReschedule() {
-        const id = document.getElementById('rescheduleAptId').value;
-        const newDate = document.getElementById('rescheduleNewDate').value;
-        const newStartTime = document.getElementById('rescheduleNewSlot').value;
+        const id = document.getElementById('reschedAptId').value;
+        const newDate = document.getElementById('reschedNewDate').value;
+        const newStartTime = document.getElementById('reschedNewSlot').value;
 
-        if (!newDate || !newStartTime) {
-          alert('Please select both a date and a time slot.');
+        if (!newStartTime) {
+          alert('Please select an available slot.');
           return;
         }
 
         try {
           const res = await fetch(`/api/appointments/${id}/reschedule`, {
             method: 'PUT',
-            headers: authHeaders(),
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
             body: JSON.stringify({ newDate, newStartTime }),
           });
-          const data = await res.json();
-          if (res.ok && data.success) {
+
+          if (res.ok) {
             closeRescheduleModal();
-            fetchStats();
+            await loadAppointments();
           } else {
-            alert('Reschedule failed: ' + (data.message || data.error || 'Server error'));
+            const err = await res.json();
+            alert('Failed to reschedule: ' + (err.message || err.error));
           }
-        } catch (err) {
-          console.error('Error rescheduling:', err);
+        } catch (e) {
+          console.error(e);
+          alert('Network error rescheduling appointment.');
         }
       }
 
-      // Resolve Callback
-      async function resolveCallback(id) {
+      // Cancel Flow
+      async function cancelAppointment(id) {
+        if (!confirm('Kya aap sach me is appointment ko cancel karna chahte hain?')) return;
+
         try {
-          const res = await fetch(`/api/callbacks/${id}/resolve`, {
+          const res = await fetch(`/api/appointments/${id}/cancel`, {
             method: 'PUT',
-            headers: authHeaders(),
+            headers: { 'Content-Type': 'application/json', ...authHeaders() },
+            body: JSON.stringify({ reason: 'Cancelled by doctor via dashboard' }),
           });
-          const data = await res.json();
-          if (res.ok && data.success) {
-            fetchStats();
+
+          if (res.ok) {
+            closeAppointmentModal();
+            await loadAppointments();
           } else {
-            alert('Failed to resolve callback');
+            alert('Failed to cancel appointment.');
           }
-        } catch (err) {
-          console.error('Error resolving callback:', err);
+        } catch (e) {
+          console.error(e);
+          alert('Network error cancelling appointment.');
         }
       }
 
-      // Emergency Banner Handlers
-      function showEmergencyBanner(alertData) {
-        const banner = document.getElementById('emergencyBanner');
-        const text = document.getElementById('emergencyBannerText');
-        text.textContent = `🚨 Patient ${alertData.patientPhoneMasked || 'Caller'} triggered 108 emergency triage at ${new Date().toLocaleTimeString('en-IN')}: "${alertData.reason || 'Acute distress'}"`;
-        banner.style.display = 'block';
-      }
-
-      function acknowledgeEmergency() {
-        document.getElementById('emergencyBanner').style.display = 'none';
-      }
-
-      // Live Server-Sent Events (SSE) with Outbox Relay, Reconnection & Polling Fallback
-      let sseFallbackPollingTimer = null;
-
-      function startSsePollingFallback() {
-        if (sseFallbackPollingTimer) return;
-        console.warn('⚠️ SSE stream disconnected. Engaging 5s polling fallback.');
-        const statusText = document.getElementById('sseStatusText');
-        const dot = document.querySelector('#sseStatus .status-dot');
-        if (statusText) statusText.textContent = 'Polling Active (Fallback)';
-        if (dot) dot.style.background = 'var(--warning)';
-
-        sseFallbackPollingTimer = setInterval(() => {
-          fetchStats();
-          fetchCallSummaries();
-        }, 5000);
-      }
-
-      function stopSsePollingFallback() {
-        if (sseFallbackPollingTimer) {
-          clearInterval(sseFallbackPollingTimer);
-          sseFallbackPollingTimer = null;
-        }
-      }
-
-      function setupLiveSSE() {
-        if (sseConnection) {
-          sseConnection.close();
-        }
-
+      // Realtime Server-Sent Events (SSE)
+      function initRealtimeSSE() {
+        if (sseConnection) sseConnection.close();
         const token = getAuthToken();
-        const url = token
-          ? `/api/dashboard/stream?token=${encodeURIComponent(token)}`
-          : '/api/dashboard/stream';
+        const url = `/api/dashboard/stream${token ? '?token=' + encodeURIComponent(token) : ''}`;
 
         sseConnection = new EventSource(url);
 
-        sseConnection.addEventListener('connected', (e) => {
-          stopSsePollingFallback();
-          const statusText = document.getElementById('sseStatusText');
-          const dot = document.querySelector('#sseStatus .status-dot');
-          if (statusText) statusText.textContent = 'Neon Postgres Live';
-          if (dot) dot.style.background = 'var(--accent)';
-        });
-
-        // 1. Instant New Booking Event
         sseConnection.addEventListener('new_appointment', (e) => {
-          stopSsePollingFallback();
-          const apt = JSON.parse(e.data);
-          console.log('⚡ Instant appointment received via SSE:', apt);
-          fetchStats();
+          loadAppointments();
         });
 
-        // 2. Rescheduled Event
         sseConnection.addEventListener('appointment_rescheduled', (e) => {
-          stopSsePollingFallback();
-          const apt = JSON.parse(e.data);
-          console.log('⚡ Appointment rescheduled via SSE:', apt);
-          fetchStats();
+          loadAppointments();
         });
 
-        // 3. Cancelled Event
         sseConnection.addEventListener('appointment_cancelled', (e) => {
-          stopSsePollingFallback();
-          const apt = JSON.parse(e.data);
-          console.log('⚡ Appointment cancelled via SSE:', apt);
-          fetchStats();
+          loadAppointments();
         });
 
-        // 4. Completed Event
-        sseConnection.addEventListener('appointment_completed', (e) => {
-          stopSsePollingFallback();
-          fetchStats();
-        });
-
-        // 5. Emergency 108 Alert Event
-        sseConnection.addEventListener('emergency_alert', (e) => {
-          stopSsePollingFallback();
-          const alertData = JSON.parse(e.data);
-          showEmergencyBanner(alertData);
-        });
-
-        // 6. Doctor Schedule Update Event
-        sseConnection.addEventListener('doctor_schedule_updated', (e) => {
-          stopSsePollingFallback();
-          const update = JSON.parse(e.data);
-          console.log('⚡ Doctor schedule updated via SSE:', update);
-          fetchStats();
-        });
-
-        // 7. Post-Call Doctor Summary Created Event
-        sseConnection.addEventListener('call_summary_created', (e) => {
-          stopSsePollingFallback();
-          console.log('⚡ Call summary created via SSE');
-          fetchCallSummaries();
-        });
-
-        sseConnection.onerror = (err) => {
-          startSsePollingFallback();
+        sseConnection.onerror = () => {
+          console.warn('SSE disconnected, polling fallback active.');
         };
       }
 
-      // Doctor OPD Schedule Configuration
-      function populateDoctorSelect(doctors) {
-        const select = document.getElementById('scheduleDoctorSelect');
-        if (!select || !doctors || doctors.length === 0) return;
-
-        const currentVal = select.value;
-        select.innerHTML = doctors
-          .map((d) => `<option value="${d.id}">${d.name} (${d.specialty})</option>`)
-          .join('');
-
-        if (currentVal && doctors.some((d) => d.id === currentVal)) {
-          select.value = currentVal;
-        } else {
-          select.value = doctors[0].id;
-        }
-
-        onDoctorSelectChange();
-      }
-
-      function onDoctorSelectChange() {
-        const select = document.getElementById('scheduleDoctorSelect');
-        const docId = select.value;
-        const doc = cachedDoctors.find((d) => d.id === docId);
-        if (!doc) return;
-
-        document.getElementById('schedStartTime').value = doc.workingHoursStart || '17:00';
-        document.getElementById('schedEndTime').value = doc.workingHoursEnd || '22:00';
-        document.getElementById('schedDuration').value = String(doc.durationMinutes || 30);
-        document.getElementById('schedFee').value = String(doc.fee || 500);
-
-        previewSlotsLive();
-      }
-
-      function applyPreset(preset) {
-        if (preset === 'evening') {
-          // Dr. Sharma 5:00 PM to 10:00 PM
-          document.getElementById('schedStartTime').value = '17:00';
-          document.getElementById('schedEndTime').value = '22:00';
-        } else if (preset === 'morning') {
-          document.getElementById('schedStartTime').value = '09:00';
-          document.getElementById('schedEndTime').value = '13:00';
-        } else if (preset === 'fullday') {
-          document.getElementById('schedStartTime').value = '09:00';
-          document.getElementById('schedEndTime').value = '18:00';
-        }
-        previewSlotsLive();
-      }
-
-      function previewSlotsLive() {
-        const start = document.getElementById('schedStartTime').value || '17:00';
-        const end = document.getElementById('schedEndTime').value || '22:00';
-        const duration = parseInt(document.getElementById('schedDuration').value, 10) || 30;
-
-        const [sh, sm] = start.split(':').map((v) => parseInt(v, 10));
-        const [eh, em] = end.split(':').map((v) => parseInt(v, 10));
-        const startMin = sh * 60 + sm;
-        const endMin = eh * 60 + em;
-
-        const container = document.getElementById('slotsPreviewBox');
-        if (startMin >= endMin) {
-          container.innerHTML =
-            '<span style="color: var(--danger); font-size: 0.72rem;">End time must be after start time</span>';
-          return;
-        }
-
-        const slots = [];
-        for (let cur = startMin; cur + duration <= endMin; cur += duration) {
-          const h = Math.floor(cur / 60)
-            .toString()
-            .padStart(2, '0');
-          const m = (cur % 60).toString().padStart(2, '0');
-          slots.push(`${h}:${m}`);
-        }
-
-        container.innerHTML = slots
-          .map((s) => `<span class="chip" style="font-size: 0.72rem;">${s}</span>`)
-          .join('');
-      }
-
-      async function saveDoctorSchedule() {
-        const doctorId = document.getElementById('scheduleDoctorSelect').value;
-        const workingHoursStart = document.getElementById('schedStartTime').value;
-        const workingHoursEnd = document.getElementById('schedEndTime').value;
-        const durationMinutes = parseInt(document.getElementById('schedDuration').value, 10);
-        const fee = parseFloat(document.getElementById('schedFee').value);
-
-        try {
-          const res = await fetch(`/api/doctors/${doctorId}/schedule`, {
-            method: 'PUT',
-            headers: authHeaders(),
-            body: JSON.stringify({
-              workingHoursStart,
-              workingHoursEnd,
-              durationMinutes,
-              fee,
-              activeDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-            }),
-          });
-
-          const data = await res.json();
-          if (res.ok && data.success) {
-            const statusEl = document.getElementById('scheduleSaveStatus');
-            statusEl.style.display = 'inline';
-            statusEl.textContent = `Saved! ${workingHoursStart} - ${workingHoursEnd}`;
-            setTimeout(() => {
-              statusEl.style.display = 'none';
-            }, 3500);
-            fetchStats();
-          } else {
-            alert('Error updating schedule: ' + (data.error || 'Server error'));
-          }
-        } catch (err) {
-          console.error('Error updating doctor schedule:', err);
-        }
-      }
-
-      // Voice AI Simulator Chat
-      async function sendMessage() {
-        const input = document.getElementById('chatInput');
-        const text = input.value.trim();
-        if (!text) return;
-
-        appendChatMessage(text, 'chat-user');
-        input.value = '';
-
-        try {
-          const res = await fetch('/api/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              text,
-              callId: `web_${Date.now()}`,
-              phone: '9876543210',
-            }),
-          });
-
-          const data = await res.json();
-          appendChatMessage(data.replyText, 'chat-bot');
-          fetchStats();
-        } catch (err) {
-          appendChatMessage('Error communicating with Appointly server.', 'chat-bot');
-        }
-      }
-
-      function sendQuickPrompt(prompt) {
-        document.getElementById('chatInput').value = prompt;
-        sendMessage();
-      }
-
-      function appendChatMessage(text, className) {
-        const box = document.getElementById('chatBox');
-        const msg = document.createElement('div');
-        msg.className = `chat-message ${className}`;
-        msg.innerHTML = escapeHtml(text).replace(/&lt;pauses&gt;/g, '...');
-        box.appendChild(msg);
-        box.scrollTop = box.scrollHeight;
-      }
-
       function escapeHtml(str) {
-        if (!str) return '';
-        return String(str)
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#039;');
+        const div = document.createElement('div');
+        div.textContent = str || '';
+        return div.innerHTML;
       }
-
-      // Initialize on load
-      window.onload = async () => {
-        await initGoogleAuth();
-        await checkAuthSession();
-        await fetchStats();
-        setupLiveSSE();
-      };
     </script>
   </body>
 </html>

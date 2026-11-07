@@ -356,11 +356,11 @@ export function createServer() {
           let updatedProfile = {};
           if (db.updateClinicProfile) {
             updatedProfile = await db.updateClinicProfile({
-              clinicName: clinicName || 'Arogya Care Clinic',
-              clinicPhone: clinicPhone || '+91 98765 43210',
-              clinicAddress: clinicAddress || '42, Green Glen Layout, Bellandur, Bengaluru',
+              clinicName: clinicName || '',
+              clinicPhone: clinicPhone || '',
+              clinicAddress: clinicAddress || '',
               openingTime: openingTime || '09:00',
-              closingTime: closingTime || '22:00',
+              closingTime: closingTime || '18:00',
               onboardingCompleted: true,
             });
           }
