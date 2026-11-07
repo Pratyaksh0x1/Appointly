@@ -19,6 +19,8 @@ export const INITIAL_DOCTORS: Doctor[] = [
     id: 'dr_sharma',
     name: 'Dr. Ramesh Sharma',
     specialty: 'General Medicine & Family Physician',
+    workingHoursStart: '09:00',
+    workingHoursEnd: '18:00',
     durationMinutes: 30,
     fee: 500,
     activeDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
@@ -39,6 +41,8 @@ export const INITIAL_DOCTORS: Doctor[] = [
     id: 'dr_priya',
     name: 'Dr. Priya Patel',
     specialty: 'Pediatrician (Child Specialist)',
+    workingHoursStart: '10:00',
+    workingHoursEnd: '18:00',
     durationMinutes: 30,
     fee: 600,
     activeDays: ['Monday', 'Wednesday', 'Friday', 'Saturday'],
@@ -48,15 +52,19 @@ export const INITIAL_DOCTORS: Doctor[] = [
     id: 'dr_rajesh',
     name: 'Dr. Rajesh Kumar',
     specialty: 'Cardiologist (Heart Specialist)',
+    workingHoursStart: '16:00',
+    workingHoursEnd: '20:00',
     durationMinutes: 30,
     fee: 900,
     activeDays: ['Tuesday', 'Thursday', 'Saturday'],
-    availableSlots: ['17:00', '17:30', '18:00', '18:30', '19:00', '19:30'],
+    availableSlots: ['16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30'],
   },
   {
     id: 'dr_ananya',
     name: 'Dr. Ananya Iyer',
     specialty: 'Dermatologist (Skin & Hair)',
+    workingHoursStart: '10:00',
+    workingHoursEnd: '18:30',
     durationMinutes: 30,
     fee: 700,
     activeDays: ['Monday', 'Tuesday', 'Thursday', 'Friday'],
@@ -100,7 +108,49 @@ export class MemoryDatabaseClient implements IDatabaseClient {
     return this.doctors.get(id) || null;
   }
 
-  public async getAvailableSlots(doctorId: string, date: string): Promise<string[] | string[]> {
+  public async updateDoctorSchedule(
+    doctorId: string,
+    schedule: {
+      workingHoursStart: string;
+      workingHoursEnd: string;
+      activeDays?: string[];
+      durationMinutes?: number;
+      fee?: number;
+    }
+  ): Promise<Doctor> {
+    const doc = this.doctors.get(doctorId);
+    if (!doc) {
+      throw new Error(`Doctor "${doctorId}" not found.`);
+    }
+
+    doc.workingHoursStart = schedule.workingHoursStart;
+    doc.workingHoursEnd = schedule.workingHoursEnd;
+    if (schedule.activeDays) doc.activeDays = schedule.activeDays;
+    if (schedule.durationMinutes) doc.durationMinutes = schedule.durationMinutes;
+    if (schedule.fee !== undefined) doc.fee = schedule.fee;
+
+    // Dynamically regenerate doctor.availableSlots from new working hours
+    const [sh, sm] = doc.workingHoursStart.split(':').map((v) => parseInt(v, 10));
+    const [eh, em] = doc.workingHoursEnd.split(':').map((v) => parseInt(v, 10));
+    const startMin = sh * 60 + sm;
+    const endMin = eh * 60 + em;
+    const duration = doc.durationMinutes || 30;
+
+    const slots: string[] = [];
+    for (let cur = startMin; cur + duration <= endMin; cur += duration) {
+      const h = Math.floor(cur / 60)
+        .toString()
+        .padStart(2, '0');
+      const m = (cur % 60).toString().padStart(2, '0');
+      slots.push(`${h}:${m}`);
+    }
+    doc.availableSlots = slots;
+
+    this.doctors.set(doctorId, doc);
+    return doc;
+  }
+
+  public async getAvailableSlots(doctorId: string, date: string): Promise<string[]> {
     const doctor = this.doctors.get(doctorId);
     if (!doctor) return [];
 
@@ -156,7 +206,23 @@ export class MemoryDatabaseClient implements IDatabaseClient {
         };
       }
 
-      // 3. Validate Slot in Doctor's Schedule
+      // 3. Validate Working Hours & Slot in Doctor's Schedule
+      const [sh, sm] = (doctor.workingHoursStart || '09:00').split(':').map((v) => parseInt(v, 10));
+      const [eh, em] = (doctor.workingHoursEnd || '18:00').split(':').map((v) => parseInt(v, 10));
+      const [th, tm] = input.startTime.split(':').map((v) => parseInt(v, 10));
+      const startMin = sh * 60 + sm;
+      const endMin = eh * 60 + em;
+      const targetMin = th * 60 + tm;
+      const duration = doctor.durationMinutes || 30;
+
+      if (targetMin < startMin || targetMin + duration > endMin) {
+        return {
+          success: false,
+          error: 'OUTSIDE_WORKING_HOURS',
+          message: `Dr. ${doctor.name} kewal ${doctor.workingHoursStart} se ${doctor.workingHoursEnd} tak hi baithte hain.`,
+        };
+      }
+
       if (!doctor.availableSlots.includes(input.startTime)) {
         return {
           success: false,

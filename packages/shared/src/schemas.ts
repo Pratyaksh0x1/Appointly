@@ -14,6 +14,32 @@ export const bookingInputSchema = z.object({
   idempotencyKey: z.string().min(8, 'Idempotency key must be at least 8 characters'),
 });
 
+export const doctorScheduleUpdateSchema = z
+  .object({
+    workingHoursStart: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Start time must be formatted as HH:mm (e.g. 17:00)'),
+    workingHoursEnd: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'End time must be formatted as HH:mm (e.g. 22:00)'),
+    activeDays: z.array(z.string()).min(1, 'At least one active day must be specified'),
+    durationMinutes: z.number().int().min(10).max(120).optional(),
+    fee: z.number().min(0).optional(),
+  })
+  .refine(
+    (data) => {
+      const [sh, sm] = data.workingHoursStart.split(':').map((v) => parseInt(v, 10));
+      const [eh, em] = data.workingHoursEnd.split(':').map((v) => parseInt(v, 10));
+      return sh * 60 + sm < eh * 60 + em;
+    },
+    {
+      message: 'workingHoursStart must be earlier than workingHoursEnd',
+      path: ['workingHoursStart'],
+    }
+  );
+
+export type DoctorScheduleUpdateInput = z.infer<typeof doctorScheduleUpdateSchema>;
+
 export const callbackInputSchema = z.object({
   callId: z.string().min(1),
   patientPhone: z.string().min(10),

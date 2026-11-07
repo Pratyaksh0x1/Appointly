@@ -13,6 +13,7 @@ import {
   BookingResult,
 } from '../types/index.js';
 import { maskPhone, rootLogger } from '../logger/logger.js';
+import { kolkataToUtc, addMinutes } from '../utils/timezone.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -66,6 +67,66 @@ export class PostgresDatabaseClient implements IDatabaseClient {
     return this.mapDoctorRow(res.rows[0]);
   }
 
+  public async updateDoctorSchedule(
+    doctorId: string,
+    schedule: {
+      workingHoursStart: string;
+      workingHoursEnd: string;
+      activeDays?: string[];
+      durationMinutes?: number;
+      fee?: number;
+    }
+  ): Promise<Doctor> {
+    const doc = await this.getDoctorById(doctorId);
+    if (!doc) throw new Error(`Doctor "${doctorId}" not found.`);
+
+    const activeDays = schedule.activeDays || doc.activeDays;
+    const durationMinutes = schedule.durationMinutes || doc.durationMinutes || 30;
+    const fee = schedule.fee !== undefined ? schedule.fee : doc.fee;
+
+    // Dynamically regenerate doctor available_slots from new working hours
+    const [sh, sm] = schedule.workingHoursStart.split(':').map((v) => parseInt(v, 10));
+    const [eh, em] = schedule.workingHoursEnd.split(':').map((v) => parseInt(v, 10));
+    const startMin = sh * 60 + sm;
+    const endMin = eh * 60 + em;
+
+    const slots: string[] = [];
+    for (let cur = startMin; cur + durationMinutes <= endMin; cur += durationMinutes) {
+      const h = Math.floor(cur / 60)
+        .toString()
+        .padStart(2, '0');
+      const m = (cur % 60).toString().padStart(2, '0');
+      slots.push(`${h}:${m}`);
+    }
+
+    const res = await this.pool.query(
+      `UPDATE doctors 
+       SET working_hours_start = $1, 
+           working_hours_end = $2, 
+           active_days = $3, 
+           duration_minutes = $4, 
+           fee = $5,
+           available_slots = $6
+       WHERE id = $7 
+       RETURNING *`,
+      [
+        schedule.workingHoursStart,
+        schedule.workingHoursEnd,
+        activeDays,
+        durationMinutes,
+        fee,
+        slots,
+        doctorId,
+      ]
+    );
+
+    if (res.rows.length === 0) {
+      throw new Error(`Failed to update doctor "${doctorId}".`);
+    }
+
+    return this.mapDoctorRow(res.rows[0]);
+  }
+
   public async getAvailableSlots(doctorId: string, date: string): Promise<string[]> {
     const doc = await this.getDoctorById(doctorId);
     if (!doc) return [];
@@ -76,7 +137,26 @@ export class PostgresDatabaseClient implements IDatabaseClient {
     );
 
     const bookedSet = new Set(bookedRes.rows.map((r) => r.start_time));
-    return doc.availableSlots.filter((slot) => !bookedSet.has(slot));
+
+    // Dynamically generate slots from workingHoursStart and workingHoursEnd
+    const [sh, sm] = (doc.workingHoursStart || '09:00').split(':').map((v) => parseInt(v, 10));
+    const [eh, em] = (doc.workingHoursEnd || '18:00').split(':').map((v) => parseInt(v, 10));
+    const startMin = sh * 60 + sm;
+    const endMin = eh * 60 + em;
+    const duration = doc.durationMinutes || 30;
+
+    const slots: string[] = [];
+    for (let cur = startMin; cur + duration <= endMin; cur += duration) {
+      const h = Math.floor(cur / 60)
+        .toString()
+        .padStart(2, '0');
+      const m = (cur % 60).toString().padStart(2, '0');
+      const slotTime = `${h}:${m}`;
+      if (!bookedSet.has(slotTime)) {
+        slots.push(slotTime);
+      }
+    }
+    return slots;
   }
 
   public async bookAppointment(input: BookingRequestInput): Promise<BookingResult> {
@@ -112,8 +192,29 @@ export class PostgresDatabaseClient implements IDatabaseClient {
       }
       const doctor = this.mapDoctorRow(docRes.rows[0]);
 
-      // 3. Check Slot validity
-      if (!doctor.availableSlots.includes(input.startTime)) {
+      // 3. Validate Working Hours & Slot validity
+      const [sh, sm] = (doctor.workingHoursStart || '09:00').split(':').map((v) => parseInt(v, 10));
+      const [eh, em] = (doctor.workingHoursEnd || '18:00').split(':').map((v) => parseInt(v, 10));
+      const [th, tm] = input.startTime.split(':').map((v) => parseInt(v, 10));
+      const startMin = sh * 60 + sm;
+      const endMin = eh * 60 + em;
+      const targetMin = th * 60 + tm;
+      const duration = doctor.durationMinutes || 30;
+
+      if (targetMin < startMin || targetMin + duration > endMin) {
+        await client.query('ROLLBACK');
+        return {
+          success: false,
+          error: 'OUTSIDE_WORKING_HOURS',
+          message: `Dr. ${doctor.name} kewal ${doctor.workingHoursStart} se ${doctor.workingHoursEnd} tak hi baithte hain.`,
+        };
+      }
+
+      if (
+        doctor.availableSlots &&
+        doctor.availableSlots.length > 0 &&
+        !doctor.availableSlots.includes(input.startTime)
+      ) {
         await client.query('ROLLBACK');
         return {
           success: false,
@@ -139,19 +240,22 @@ export class PostgresDatabaseClient implements IDatabaseClient {
         };
       }
 
-      // 5. Calculate End Time
+      // 5. Calculate End Time & UTC timestamps
       const [hours, minutes] = input.startTime.split(':').map((v) => parseInt(v, 10));
       const totalMinutes = hours * 60 + minutes + doctor.durationMinutes;
       const endH = Math.floor(totalMinutes / 60) % 24;
       const endM = totalMinutes % 60;
       const endTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
 
+      const slotStartUtc = kolkataToUtc(input.date, input.startTime);
+      const slotEndUtc = addMinutes(slotStartUtc, doctor.durationMinutes);
+
       // 6. Insert Appointment
       const id = `apt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
       const insertRes = await client.query(
         `INSERT INTO appointments 
-         (id, doctor_id, patient_name, patient_phone_masked, appointment_date, start_time, end_time, duration_minutes, status, idempotency_key, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'CONFIRMED', $9, NOW())
+         (id, doctor_id, patient_name, patient_phone_masked, appointment_date, start_time, end_time, duration_minutes, slot_start, slot_end, status, idempotency_key, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'CONFIRMED', $11, NOW())
          RETURNING *`,
         [
           id,
@@ -162,6 +266,8 @@ export class PostgresDatabaseClient implements IDatabaseClient {
           input.startTime,
           endTime,
           doctor.durationMinutes,
+          slotStartUtc.toISOString(),
+          slotEndUtc.toISOString(),
           input.idempotencyKey,
         ]
       );
@@ -246,8 +352,10 @@ export class PostgresDatabaseClient implements IDatabaseClient {
       id: String(row.id),
       name: String(row.name),
       specialty: String(row.specialty),
-      durationMinutes: Number(row.duration_minutes),
-      fee: Number(row.fee),
+      workingHoursStart: String(row.working_hours_start || '09:00'),
+      workingHoursEnd: String(row.working_hours_end || '18:00'),
+      durationMinutes: Number(row.duration_minutes || 30),
+      fee: Number(row.fee || 500),
       activeDays: (row.active_days as string[]) || [],
       availableSlots: (row.available_slots as string[]) || [],
     };

@@ -497,11 +497,245 @@
               <!-- Rendered dynamically -->
             </div>
           </div>
+
+          <!-- Doctor Schedule Configuration Panel -->
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">🩺 Doctor OPD Schedule & Clinic Timing</div>
+              <span style="font-size: 0.75rem; color: var(--text-muted)">Agent Auto-Sync</span>
+            </div>
+
+            <p style="font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 12px">
+              Doctor can decide and configure clinic opening/closing hours. Voice agent strictly
+              schedules appointments only within these hours.
+            </p>
+
+            <div style="display: flex; flex-direction: column; gap: 12px">
+              <div>
+                <label
+                  style="
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                    color: var(--text-muted);
+                    display: block;
+                    margin-bottom: 4px;
+                  "
+                  >SELECT DOCTOR</label
+                >
+                <select
+                  id="scheduleDoctorSelect"
+                  class="chat-input"
+                  style="width: 100%"
+                  onchange="onDoctorSelectChange()"
+                >
+                  <!-- Dynamically populated -->
+                </select>
+              </div>
+
+              <!-- Quick Presets -->
+              <div>
+                <label
+                  style="
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                    color: var(--text-muted);
+                    display: block;
+                    margin-bottom: 6px;
+                  "
+                  >QUICK OPD PRESETS</label
+                >
+                <div class="quick-chips">
+                  <span class="chip" onclick="applyPreset('evening')"
+                    >🌆 Evening OPD (17:00 - 22:00)</span
+                  >
+                  <span class="chip" onclick="applyPreset('morning')"
+                    >🌅 Morning OPD (09:00 - 13:00)</span
+                  >
+                  <span class="chip" onclick="applyPreset('fullday')"
+                    >☀️ Full Day (09:00 - 18:00)</span
+                  >
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
+                <div>
+                  <label
+                    style="
+                      font-size: 0.75rem;
+                      font-weight: 600;
+                      color: var(--text-muted);
+                      display: block;
+                      margin-bottom: 4px;
+                    "
+                    >OPD START TIME</label
+                  >
+                  <input
+                    type="time"
+                    id="schedStartTime"
+                    class="chat-input"
+                    value="17:00"
+                    style="width: 100%"
+                    onchange="previewSlotsLive()"
+                  />
+                </div>
+                <div>
+                  <label
+                    style="
+                      font-size: 0.75rem;
+                      font-weight: 600;
+                      color: var(--text-muted);
+                      display: block;
+                      margin-bottom: 4px;
+                    "
+                    >OPD END TIME</label
+                  >
+                  <input
+                    type="time"
+                    id="schedEndTime"
+                    class="chat-input"
+                    value="22:00"
+                    style="width: 100%"
+                    onchange="previewSlotsLive()"
+                  />
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px">
+                <div>
+                  <label
+                    style="
+                      font-size: 0.75rem;
+                      font-weight: 600;
+                      color: var(--text-muted);
+                      display: block;
+                      margin-bottom: 4px;
+                    "
+                    >SLOT DURATION</label
+                  >
+                  <select
+                    id="schedDuration"
+                    class="chat-input"
+                    style="width: 100%"
+                    onchange="previewSlotsLive()"
+                  >
+                    <option value="15">15 Minutes</option>
+                    <option value="20">20 Minutes</option>
+                    <option value="30" selected>30 Minutes</option>
+                    <option value="45">45 Minutes</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    style="
+                      font-size: 0.75rem;
+                      font-weight: 600;
+                      color: var(--text-muted);
+                      display: block;
+                      margin-bottom: 4px;
+                    "
+                    >CONSULTATION FEE (₹)</label
+                  >
+                  <input
+                    type="number"
+                    id="schedFee"
+                    class="chat-input"
+                    value="500"
+                    style="width: 100%"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  style="
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                    color: var(--text-muted);
+                    display: block;
+                    margin-bottom: 6px;
+                  "
+                  >ACTIVE CLINIC DAYS</label
+                >
+                <div style="display: flex; flex-wrap: wrap; gap: 10px" id="dayCheckboxes">
+                  <label style="font-size: 0.8125rem; display: flex; align-items: center; gap: 4px"
+                    ><input type="checkbox" name="activeDay" value="Monday" checked /> Mon</label
+                  >
+                  <label style="font-size: 0.8125rem; display: flex; align-items: center; gap: 4px"
+                    ><input type="checkbox" name="activeDay" value="Tuesday" checked /> Tue</label
+                  >
+                  <label style="font-size: 0.8125rem; display: flex; align-items: center; gap: 4px"
+                    ><input type="checkbox" name="activeDay" value="Wednesday" checked /> Wed</label
+                  >
+                  <label style="font-size: 0.8125rem; display: flex; align-items: center; gap: 4px"
+                    ><input type="checkbox" name="activeDay" value="Thursday" checked /> Thu</label
+                  >
+                  <label style="font-size: 0.8125rem; display: flex; align-items: center; gap: 4px"
+                    ><input type="checkbox" name="activeDay" value="Friday" checked /> Fri</label
+                  >
+                  <label style="font-size: 0.8125rem; display: flex; align-items: center; gap: 4px"
+                    ><input type="checkbox" name="activeDay" value="Saturday" checked /> Sat</label
+                  >
+                  <label style="font-size: 0.8125rem; display: flex; align-items: center; gap: 4px"
+                    ><input type="checkbox" name="activeDay" value="Sunday" /> Sun</label
+                  >
+                </div>
+              </div>
+
+              <!-- Live Slot Inspector Preview -->
+              <div>
+                <label
+                  style="
+                    font-size: 0.75rem;
+                    font-weight: 600;
+                    color: var(--text-muted);
+                    display: block;
+                    margin-bottom: 4px;
+                  "
+                  >LIVE GENERATED SLOTS PREVIEW</label
+                >
+                <div
+                  id="slotsPreviewBox"
+                  class="quick-chips"
+                  style="
+                    background: var(--bg);
+                    padding: 8px;
+                    border-radius: 6px;
+                    border: 1px dashed var(--border);
+                    min-height: 38px;
+                  "
+                >
+                  <!-- Dynamically previewed slots -->
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 12px; align-items: center; margin-top: 4px">
+                <button
+                  class="btn"
+                  style="flex: 1; background: var(--primary)"
+                  onclick="saveDoctorSchedule()"
+                >
+                  💾 Save Doctor Schedule
+                </button>
+                <span
+                  id="scheduleSaveStatus"
+                  style="
+                    font-size: 0.8125rem;
+                    font-weight: 600;
+                    color: var(--accent);
+                    display: none;
+                  "
+                  >Schedule updated live!</span
+                >
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </main>
 
     <script>
+      let cachedDoctors = [];
+
       async function fetchStats() {
         try {
           const [aptRes, docRes, cbRes, costRes] = await Promise.all([
@@ -516,6 +750,8 @@
           const callbacks = await cbRes.json();
           const cost = await costRes.json();
 
+          cachedDoctors = doctors;
+
           document.getElementById('countAppointments').textContent = appointments.length;
           document.getElementById('countDoctors').textContent = doctors.length;
           document.getElementById('countCallbacks').textContent = callbacks.length;
@@ -523,6 +759,7 @@
 
           renderAppointments(appointments);
           renderDoctors(doctors);
+          populateDoctorSelect(doctors);
         } catch (err) {
           console.error('Error fetching dashboard stats:', err);
         }
@@ -576,13 +813,157 @@
         <div class="doctor-card">
           <div>
             <div class="doctor-name">${doc.name}</div>
-            <div class="doctor-specialty">${doc.specialty} (${doc.durationMinutes}m slots)</div>
+            <div class="doctor-specialty">${doc.specialty} (${doc.durationMinutes || 30}m slots)</div>
+            <div style="font-size: 0.75rem; color: var(--primary); font-weight: 600; margin-top: 4px;">
+              ⏰ OPD: ${doc.workingHoursStart || '09:00'} - ${doc.workingHoursEnd || '18:00'} • ${(doc.activeDays || []).slice(0, 3).join(', ')}${(doc.activeDays || []).length > 3 ? '...' : ''}
+            </div>
           </div>
-          <div class="doctor-fee">₹${doc.fee}</div>
+          <div style="text-align: right;">
+            <div class="doctor-fee">₹${doc.fee}</div>
+            <button class="chip" style="margin-top: 6px; font-size: 0.7rem;" onclick="loadDoctorIntoScheduleEditor('${doc.id}')">⚙️ Edit Timing</button>
+          </div>
         </div>
       `
           )
           .join('');
+      }
+
+      function populateDoctorSelect(doctors) {
+        const select = document.getElementById('scheduleDoctorSelect');
+        if (!select || !doctors || doctors.length === 0) return;
+
+        const currentVal = select.value;
+        select.innerHTML = doctors
+          .map((d) => `<option value="${d.id}">${d.name} (${d.specialty})</option>`)
+          .join('');
+
+        if (currentVal && doctors.some((d) => d.id === currentVal)) {
+          select.value = currentVal;
+        } else {
+          select.value = doctors[0].id;
+        }
+
+        onDoctorSelectChange();
+      }
+
+      function onDoctorSelectChange() {
+        const select = document.getElementById('scheduleDoctorSelect');
+        const docId = select.value;
+        const doc = cachedDoctors.find((d) => d.id === docId);
+        if (!doc) return;
+
+        document.getElementById('schedStartTime').value = doc.workingHoursStart || '17:00';
+        document.getElementById('schedEndTime').value = doc.workingHoursEnd || '22:00';
+        document.getElementById('schedDuration').value = String(doc.durationMinutes || 30);
+        document.getElementById('schedFee').value = String(doc.fee || 500);
+
+        const days = new Set(doc.activeDays || []);
+        document.querySelectorAll('input[name="activeDay"]').forEach((cb) => {
+          cb.checked = days.has(cb.value);
+        });
+
+        previewSlotsLive();
+      }
+
+      function loadDoctorIntoScheduleEditor(doctorId) {
+        const select = document.getElementById('scheduleDoctorSelect');
+        select.value = doctorId;
+        onDoctorSelectChange();
+        select.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+
+      function applyPreset(preset) {
+        if (preset === 'evening') {
+          // Dr. Sharma 5:00 PM to 10:00 PM example specifically requested
+          document.getElementById('schedStartTime').value = '17:00';
+          document.getElementById('schedEndTime').value = '22:00';
+        } else if (preset === 'morning') {
+          document.getElementById('schedStartTime').value = '09:00';
+          document.getElementById('schedEndTime').value = '13:00';
+        } else if (preset === 'fullday') {
+          document.getElementById('schedStartTime').value = '09:00';
+          document.getElementById('schedEndTime').value = '18:00';
+        }
+        previewSlotsLive();
+      }
+
+      function previewSlotsLive() {
+        const start = document.getElementById('schedStartTime').value || '17:00';
+        const end = document.getElementById('schedEndTime').value || '22:00';
+        const duration = parseInt(document.getElementById('schedDuration').value, 10) || 30;
+
+        const [sh, sm] = start.split(':').map((v) => parseInt(v, 10));
+        const [eh, em] = end.split(':').map((v) => parseInt(v, 10));
+        const startMin = sh * 60 + sm;
+        const endMin = eh * 60 + em;
+
+        const container = document.getElementById('slotsPreviewBox');
+        if (startMin >= endMin) {
+          container.innerHTML =
+            '<span style="color: var(--danger); font-size: 0.75rem;">End time must be after start time</span>';
+          return;
+        }
+
+        const slots = [];
+        for (let cur = startMin; cur + duration <= endMin; cur += duration) {
+          const h = Math.floor(cur / 60)
+            .toString()
+            .padStart(2, '0');
+          const m = (cur % 60).toString().padStart(2, '0');
+          slots.push(`${h}:${m}`);
+        }
+
+        container.innerHTML = slots
+          .map((s) => `<span class="chip" style="font-size: 0.72rem;">${s}</span>`)
+          .join('');
+      }
+
+      async function saveDoctorSchedule() {
+        const doctorId = document.getElementById('scheduleDoctorSelect').value;
+        const workingHoursStart = document.getElementById('schedStartTime').value;
+        const workingHoursEnd = document.getElementById('schedEndTime').value;
+        const durationMinutes = parseInt(document.getElementById('schedDuration').value, 10);
+        const fee = parseFloat(document.getElementById('schedFee').value);
+
+        const activeDays = [];
+        document.querySelectorAll('input[name="activeDay"]:checked').forEach((cb) => {
+          activeDays.push(cb.value);
+        });
+
+        if (activeDays.length === 0) {
+          alert('Please select at least one active clinic day.');
+          return;
+        }
+
+        try {
+          const res = await fetch(`/api/doctors/${doctorId}/schedule`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              workingHoursStart,
+              workingHoursEnd,
+              durationMinutes,
+              fee,
+              activeDays,
+            }),
+          });
+
+          const data = await res.json();
+          if (res.ok && data.success) {
+            const statusEl = document.getElementById('scheduleSaveStatus');
+            statusEl.style.display = 'inline';
+            statusEl.textContent = `Saved! Open ${workingHoursStart} - ${workingHoursEnd}`;
+            setTimeout(() => {
+              statusEl.style.display = 'none';
+            }, 3500);
+            fetchStats();
+          } else {
+            alert('Error updating schedule: ' + (data.error || 'Server error'));
+          }
+        } catch (err) {
+          console.error('Error updating doctor schedule:', err);
+          alert('Failed to update schedule.');
+        }
       }
 
       // Connect to Server-Sent Events (SSE)
@@ -599,6 +980,12 @@
         eventSource.addEventListener('new_appointment', (e) => {
           const apt = JSON.parse(e.data);
           console.log('Instant appointment received via SSE:', apt);
+          fetchStats();
+        });
+
+        eventSource.addEventListener('doctor_schedule_updated', (e) => {
+          const update = JSON.parse(e.data);
+          console.log('Doctor schedule updated via SSE:', update);
           fetchStats();
         });
 

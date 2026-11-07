@@ -15,6 +15,7 @@ import { globalCostMeter } from './cost/cost-meter.js';
 import { checkEmergency, EMERGENCY_ESCALATION_HINGLISH } from './safety/emergency.js';
 import { EvonLLMClient, ToolDefinition, ChatMessage } from './services/evon-llm-client.js';
 import { GnaniTTSClient } from './services/tts-client.js';
+import { doctorScheduleUpdateSchema } from '@appointly/shared';
 
 let isShuttingDown = false;
 const sseClients = new Set<http.ServerResponse>();
@@ -225,6 +226,60 @@ export function createServer() {
         return;
       }
 
+      // 4b. Doctor Schedule Configuration (Doctor decides consultation timing e.g. 17:00 - 22:00)
+      const scheduleMatch = pathname.match(/^\/api\/doctors\/([^/]+)\/schedule$/);
+      if ((req.method === 'PUT' || req.method === 'POST') && scheduleMatch) {
+        const doctorId = scheduleMatch[1];
+        let body = '';
+        req.on('data', (chunk) => (body += chunk));
+        req.on('end', async () => {
+          try {
+            const raw = JSON.parse(body || '{}');
+            const parsed = doctorScheduleUpdateSchema.safeParse(raw);
+            if (!parsed.success) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(
+                JSON.stringify({
+                  error: 'INVALID_SCHEDULE_DATA',
+                  details: parsed.error.format(),
+                })
+              );
+              return;
+            }
+
+            const updatedDoc = await db.updateDoctorSchedule(doctorId, parsed.data);
+
+            // Broadcast real-time schedule update event to connected dashboards
+            broadcastDashboardEvent('doctor_schedule_updated', {
+              doctorId,
+              doctor: updatedDoc,
+              timestamp: new Date().toISOString(),
+            });
+
+            rootLogger.info(`Doctor schedule updated for ${doctorId}`, {
+              doctorId,
+              workingHoursStart: updatedDoc.workingHoursStart,
+              workingHoursEnd: updatedDoc.workingHoursEnd,
+              activeDays: updatedDoc.activeDays,
+            });
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(
+              JSON.stringify({
+                success: true,
+                message: `Schedule for ${updatedDoc.name} updated to ${updatedDoc.workingHoursStart} - ${updatedDoc.workingHoursEnd}.`,
+                doctor: updatedDoc,
+              })
+            );
+          } catch (err) {
+            rootLogger.error('Error updating doctor schedule:', err);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: String(err) }));
+          }
+        });
+        return;
+      }
+
       // 5. Available slots
       if (req.method === 'GET' && pathname === '/api/slots') {
         const doctorId = parsedUrl.searchParams.get('doctorId') || 'dr_sharma';
@@ -311,15 +366,30 @@ export function createServer() {
             }
 
             // LLM Reasoning & Tool Calling
+            const clinicDoctors = await db.getDoctors();
+            const doctorScheduleDesc = clinicDoctors
+              .map(
+                (d) =>
+                  `- ${d.name} (${d.specialty}): OPD Timing ${d.workingHoursStart} se ${d.workingHoursEnd} on ${d.activeDays.join(', ')} (Fee: ₹${d.fee})`
+              )
+              .join('\n');
+
             const messages: ChatMessage[] = [
               {
                 role: 'system',
                 content:
                   'You are Appointly, an empathetic, highly professional clinic voice assistant for Arogya Care Clinic. ' +
                   'You speak in natural Hinglish (Hindi + English code-switching). ' +
-                  'Your mission is to help patients book doctor appointments, check timings, fees, and doctor availability. ' +
-                  'RULE 1: You CANNOT write to the database. You MUST call tools (get_clinic_doctors, get_available_slots, book_appointment). ' +
-                  'RULE 2: When an appointment is booked, tell the patient clearly: doctor name, date, start time, and duration (in minutes). ' +
+                  'Your mission is to help patients book doctor appointments, check timings, fees, and doctor availability.\n\n' +
+                  'CURRENT CLINIC DOCTORS & OPD TIMINGS:\n' +
+                  doctorScheduleDesc +
+                  '\n\n' +
+                  'CRITICAL DOCTOR TIMING RULES:\n' +
+                  '1. Each doctor configures their specific consultation hours (e.g. Dr. Sharma may sit 17:00 to 22:00 / 5 PM to 10 PM).\n' +
+                  "2. NEVER offer or book a slot outside the doctor's active working hours.\n" +
+                  "3. If a patient asks for an unavailable time (e.g. asking for 10:00 AM when doctor works 17:00 to 22:00), politely explain the doctor's active timing in Hinglish and suggest available evening slots.\n" +
+                  '4. RULE 1: You CANNOT write directly to the database. You MUST call tools (get_clinic_doctors, get_available_slots, book_appointment).\n' +
+                  '5. RULE 2: When an appointment is booked, tell the patient clearly: doctor name, date, start time, and duration (in minutes). Only say "booked" after the DB tool confirms with success.\n' +
                   'Use natural conversational speech tags like <pauses> when appropriate.',
               },
               { role: 'user', content: userText },
@@ -346,6 +416,7 @@ export function createServer() {
                       durationMinutes: number;
                     };
                     message: string;
+                    error?: string;
                   };
 
                   if (bookingRes.success && bookingRes.appointment) {
@@ -360,10 +431,26 @@ export function createServer() {
                     finalReply = `Maaf kijiye, ${bookingRes.message}`;
                   }
                 } else if (tc.function.name === 'get_clinic_doctors') {
-                  finalReply =
-                    'Hamare clinic me Dr. Ramesh Sharma (General Medicine), Dr. Priya Patel (Pediatrician), ' +
-                    'Dr. Rajesh Kumar (Cardiologist), aur Dr. Ananya Iyer (Dermatologist) uplabdh hain. ' +
-                    'Aap kinke liye appointment book karna chahenge?';
+                  const docs = (toolExecution.result as any[]) || clinicDoctors;
+                  const docOverview = docs
+                    .map(
+                      (d) =>
+                        `${d.name} (${d.specialty}, Timing: ${d.workingHoursStart} - ${d.workingHoursEnd}, Fee: ₹${d.fee})`
+                    )
+                    .join('; ');
+                  finalReply = `Hamare clinic me ye doctors uplabdh hain: ${docOverview}. Aap kinke sath appointment lena chahenge?`;
+                } else if (tc.function.name === 'get_available_slots') {
+                  const slotRes = toolExecution.result as {
+                    doctorId: string;
+                    date: string;
+                    availableSlots: string[];
+                  };
+                  if (slotRes.availableSlots && slotRes.availableSlots.length > 0) {
+                    const sample = slotRes.availableSlots.slice(0, 6).join(', ');
+                    finalReply = `${slotRes.date} ke liye ye time slots uplabdh hain: ${sample}. Aapko kaunsa time theek rahega?`;
+                  } else {
+                    finalReply = `Maaf kijiye, is date (${slotRes.date}) par koi slot uplabdh nahi hai. Kripya doctor ke clinic timing me kisi aur din ya samay ka slot chuniye.`;
+                  }
                 }
               }
             }

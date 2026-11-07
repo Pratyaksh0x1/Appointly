@@ -17,6 +17,16 @@ export interface IDatabaseClient {
 
   getDoctors(): Promise<Doctor[]>;
   getDoctorById(id: string): Promise<Doctor | null>;
+  updateDoctorSchedule(
+    doctorId: string,
+    schedule: {
+      workingHoursStart: string;
+      workingHoursEnd: string;
+      activeDays?: string[];
+      durationMinutes?: number;
+      fee?: number;
+    }
+  ): Promise<Doctor>;
   getAvailableSlots(doctorId: string, date: string): Promise<string[]>;
 
   /**

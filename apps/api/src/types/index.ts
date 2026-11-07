@@ -10,6 +10,8 @@ export interface Doctor {
   id: string;
   name: string;
   specialty: string;
+  workingHoursStart: string; // HH:mm, e.g. "09:00" or "17:00"
+  workingHoursEnd: string; // HH:mm, e.g. "18:00" or "22:00"
   durationMinutes: number;
   fee: number;
   activeDays: string[]; // e.g. ["Monday", "Tuesday", ...]
@@ -73,7 +75,8 @@ export interface BookingResult {
     | 'INVALID_DOCTOR'
     | 'INVALID_SLOT'
     | 'DATABASE_ERROR'
-    | 'IDEMPOTENT_REPLAY';
+    | 'IDEMPOTENT_REPLAY'
+    | 'OUTSIDE_WORKING_HOURS';
   message: string;
 }
 

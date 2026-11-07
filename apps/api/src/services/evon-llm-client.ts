@@ -182,10 +182,40 @@ export class EvonLLMClient implements ILLMClient {
 
     // Intent 1: Booking request -> Trigger book_appointment tool
     if (lastUserMessage.includes('book') || lastUserMessage.includes('appointment')) {
-      // Pick a date from user message or default to tomorrow
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const bookingDate = tomorrow.toISOString().slice(0, 10);
+      // Pick a date from user message or default to 2 days ahead
+      let bookingDate = '';
+      const dateMatch = lastUserMessage.match(/(\d{4}-\d{2}-\d{2})/);
+      if (dateMatch) {
+        bookingDate = dateMatch[1];
+      } else {
+        const d = new Date();
+        d.setDate(d.getDate() + 2);
+        if (d.getDay() === 0) d.setDate(d.getDate() + 1); // skip Sunday
+        bookingDate = d.toISOString().slice(0, 10);
+      }
+
+      // Determine doctor
+      let doctorId = 'dr_sharma';
+      if (lastUserMessage.includes('priya')) doctorId = 'dr_priya';
+      else if (lastUserMessage.includes('rajesh')) doctorId = 'dr_rajesh';
+      else if (lastUserMessage.includes('ananya')) doctorId = 'dr_ananya';
+
+      // Determine time
+      let startTime = '09:30';
+      const timeMatch = lastUserMessage.match(/(\d{1,2}):(\d{2})/);
+      if (timeMatch) {
+        const hh = timeMatch[1].padStart(2, '0');
+        const mm = timeMatch[2];
+        startTime = `${hh}:${mm}`;
+      } else if (
+        lastUserMessage.includes('shaam') ||
+        lastUserMessage.includes('evening') ||
+        lastUserMessage.includes('5 pm') ||
+        lastUserMessage.includes('5 baje') ||
+        lastUserMessage.includes('17:00')
+      ) {
+        startTime = '17:30';
+      }
 
       const toolCall: ToolCall = {
         id: `call_${Date.now()}_book`,
@@ -193,9 +223,9 @@ export class EvonLLMClient implements ILLMClient {
         function: {
           name: 'book_appointment',
           arguments: JSON.stringify({
-            doctorId: 'dr_sharma',
+            doctorId,
             date: bookingDate,
-            startTime: '09:30',
+            startTime,
             patientName: 'Rohan Sharma',
             patientPhone: '9876543210',
           }),

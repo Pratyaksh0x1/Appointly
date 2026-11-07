@@ -21,6 +21,9 @@ describe('Phase 2: Database and Booking Core Service', () => {
     await pool.query(
       `DELETE FROM slot_holds WHERE doctor_id = 'dr_sharma' AND slot_start >= '2026-12-01'`
     );
+    await pool.query(
+      `UPDATE doctors SET working_hours_start = '09:00', working_hours_end = '18:00', active_days = ARRAY['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']::text[] WHERE id = 'dr_sharma'`
+    );
   }, 30000);
 
   afterAll(async () => {
@@ -30,6 +33,9 @@ describe('Phase 2: Database and Booking Core Service', () => {
     );
     await pool.query(
       `DELETE FROM slot_holds WHERE doctor_id = 'dr_sharma' AND slot_start >= '2026-12-01'`
+    );
+    await pool.query(
+      `UPDATE doctors SET working_hours_start = '09:00', working_hours_end = '18:00', active_days = ARRAY['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']::text[] WHERE id = 'dr_sharma'`
     );
     await service.close();
   }, 30000);

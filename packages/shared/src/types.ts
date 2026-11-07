@@ -164,7 +164,12 @@ export interface HoldSlotResult {
   expiresAt?: Date;
   slotStartUtc?: Date;
   slotEndUtc?: Date;
-  error?: 'SLOT_UNAVAILABLE' | 'DOCTOR_NOT_FOUND' | 'INVALID_SLOT' | 'DATABASE_ERROR';
+  error?:
+    | 'SLOT_UNAVAILABLE'
+    | 'DOCTOR_NOT_FOUND'
+    | 'INVALID_SLOT'
+    | 'DATABASE_ERROR'
+    | 'OUTSIDE_WORKING_HOURS';
   message: string;
 }
 
@@ -177,7 +182,8 @@ export interface BookingResult {
     | 'INVALID_SLOT'
     | 'HOLD_EXPIRED'
     | 'DATABASE_ERROR'
-    | 'IDEMPOTENT_REPLAY';
+    | 'IDEMPOTENT_REPLAY'
+    | 'OUTSIDE_WORKING_HOURS';
   message: string;
 }
 

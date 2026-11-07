@@ -24,7 +24,12 @@ import {
   SEEDED_DOCTORS,
   SEEDED_APPOINTMENT_TYPES,
 } from '@appointly/shared';
-import { kolkataToUtc, formatKolkata, addMinutes } from '../utils/timezone.js';
+import {
+  kolkataToUtc,
+  formatKolkata,
+  addMinutes,
+  getDayOfWeekInKolkata,
+} from '../utils/timezone.js';
 import {
   generateDoctorSlots,
   filterAvailableSlots,
@@ -83,6 +88,74 @@ export class BookingCoreService {
     const doc = this.mapDoctor(docRes.rows[0]);
     this.doctorCache.set(doctorId, { doctor: doc, expiry: now + 300000 }); // 5 min TTL
     return doc;
+  }
+
+  public async updateDoctorSchedule(
+    doctorId: string,
+    schedule: {
+      workingHoursStart: string;
+      workingHoursEnd: string;
+      activeDays?: string[];
+      durationMinutes?: number;
+      fee?: number;
+    }
+  ): Promise<Doctor> {
+    const existing = await this.getDoctor(doctorId);
+    if (!existing) {
+      throw new Error(`Doctor "${doctorId}" not found.`);
+    }
+
+    const activeDays =
+      schedule.activeDays && schedule.activeDays.length > 0
+        ? schedule.activeDays
+        : existing.activeDays;
+    const durationMinutes = schedule.durationMinutes || existing.durationMinutes || 30;
+    const fee = schedule.fee !== undefined ? schedule.fee : existing.fee || 500;
+
+    // Dynamically regenerate doctor available_slots from new working hours
+    const [sh, sm] = schedule.workingHoursStart.split(':').map((v) => parseInt(v, 10));
+    const [eh, em] = schedule.workingHoursEnd.split(':').map((v) => parseInt(v, 10));
+    const startMin = sh * 60 + sm;
+    const endMin = eh * 60 + em;
+
+    const slots: string[] = [];
+    for (let cur = startMin; cur + durationMinutes <= endMin; cur += durationMinutes) {
+      const h = Math.floor(cur / 60)
+        .toString()
+        .padStart(2, '0');
+      const m = (cur % 60).toString().padStart(2, '0');
+      slots.push(`${h}:${m}`);
+    }
+
+    const updateRes = await this.pool.query(
+      `UPDATE doctors 
+       SET working_hours_start = $1, 
+           working_hours_end = $2, 
+           active_days = $3, 
+           duration_minutes = $4, 
+           fee = $5,
+           available_slots = $6
+       WHERE id = $7 
+       RETURNING *`,
+      [
+        schedule.workingHoursStart,
+        schedule.workingHoursEnd,
+        activeDays,
+        durationMinutes,
+        fee,
+        slots,
+        doctorId,
+      ]
+    );
+
+    if (updateRes.rows.length === 0) {
+      throw new Error(`Failed to update doctor "${doctorId}".`);
+    }
+
+    const updated = this.mapDoctor(updateRes.rows[0]);
+    // Invalidate/refresh cache immediately so voice agent and slot generator see updated hours immediately
+    this.doctorCache.set(doctorId, { doctor: updated, expiry: Date.now() + 300000 });
+    return updated;
   }
 
   public async getAppointmentType(typeId: string): Promise<AppointmentType | null> {
@@ -215,6 +288,36 @@ export class BookingCoreService {
 
     const slotStartUtc = kolkataToUtc(input.date, input.startTime);
     const slotEndUtc = addMinutes(slotStartUtc, durationMin);
+
+    // Validate doctor working days
+    const dayOfWeek = getDayOfWeekInKolkata(input.date);
+    const isWorkingDay = doctor.activeDays.some(
+      (day) => day.trim().toLowerCase() === dayOfWeek.trim().toLowerCase()
+    );
+    if (!isWorkingDay) {
+      return {
+        success: false,
+        error: 'OUTSIDE_WORKING_HOURS',
+        message: `Dr. ${doctor.name} ${dayOfWeek} ko available nahi hain. Unke active days hain: ${doctor.activeDays.join(', ')}.`,
+      };
+    }
+
+    // Validate doctor working hours
+    const [sh, sm] = doctor.workingHoursStart.split(':').map((v) => parseInt(v, 10));
+    const [eh, em] = doctor.workingHoursEnd.split(':').map((v) => parseInt(v, 10));
+    const [th, tm] = input.startTime.split(':').map((v) => parseInt(v, 10));
+    const startMin = sh * 60 + sm;
+    const endMin = eh * 60 + em;
+    const targetMin = th * 60 + tm;
+    const targetEndMin = targetMin + durationMin;
+
+    if (targetMin < startMin || targetEndMin > endMin) {
+      return {
+        success: false,
+        error: 'OUTSIDE_WORKING_HOURS',
+        message: `Dr. ${doctor.name} kewal ${doctor.workingHoursStart} se ${doctor.workingHoursEnd} tak hi baithte hain.`,
+      };
+    }
 
     // Check if slot has already passed
     if (slotStartUtc.getTime() <= referenceNow.getTime()) {
@@ -364,6 +467,38 @@ export class BookingCoreService {
 
       const slotStartUtc = kolkataToUtc(input.date, input.startTime);
       const slotEndUtc = addMinutes(slotStartUtc, durationMin);
+
+      // Validate doctor working days
+      const dayOfWeek = getDayOfWeekInKolkata(input.date);
+      const isWorkingDay = doctor.activeDays.some(
+        (day) => day.trim().toLowerCase() === dayOfWeek.trim().toLowerCase()
+      );
+      if (!isWorkingDay) {
+        await client.query('ROLLBACK');
+        return {
+          success: false,
+          error: 'OUTSIDE_WORKING_HOURS',
+          message: `Dr. ${doctor.name} ${dayOfWeek} ko available nahi hain. Unke active days hain: ${doctor.activeDays.join(', ')}.`,
+        };
+      }
+
+      // Validate doctor working hours
+      const [sh, sm] = doctor.workingHoursStart.split(':').map((v) => parseInt(v, 10));
+      const [eh, em] = doctor.workingHoursEnd.split(':').map((v) => parseInt(v, 10));
+      const [th, tm] = input.startTime.split(':').map((v) => parseInt(v, 10));
+      const startMin = sh * 60 + sm;
+      const endMin = eh * 60 + em;
+      const targetMin = th * 60 + tm;
+      const targetEndMin = targetMin + durationMin;
+
+      if (targetMin < startMin || targetEndMin > endMin) {
+        await client.query('ROLLBACK');
+        return {
+          success: false,
+          error: 'OUTSIDE_WORKING_HOURS',
+          message: `Dr. ${doctor.name} kewal ${doctor.workingHoursStart} se ${doctor.workingHoursEnd} tak hi baithte hain.`,
+        };
+      }
 
       // 4. Validate or Convert Hold Token if provided
       if (input.holdToken) {
