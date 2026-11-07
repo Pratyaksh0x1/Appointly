@@ -402,7 +402,14 @@ async function processClinicalFallback(
   const db = getDatabaseClient();
   const lower = text.toLowerCase();
   const dbDocs = await db.getDoctors();
-  const primaryDoc = doctors[0] || dbDocs[0] || {
+  const allDocs = doctors.length > 0 ? doctors : dbDocs;
+
+  // Smart doctor matching: match if user mentioned any doctor's first or last name
+  const matchedDoc = allDocs.find((d) => {
+    const cleanDocName = d.name.toLowerCase().replace(/dr\.?\s*/i, '').trim();
+    const parts = cleanDocName.split(/\s+/);
+    return parts.some((p) => p.length >= 3 && (lower.includes(p) || text.includes(p)));
+  }) || allDocs[0] || {
     id: 'doc_1',
     name: 'Doctor',
     specialty: 'General Physician',
@@ -414,6 +421,7 @@ async function processClinicalFallback(
     availableSlots: ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00'],
   };
 
+  const targetDoc = matchedDoc;
   const clinicTitle = profile.clinicName || 'Clinic';
   const clinicLocStr = profile.clinicAddress ? ` Clinic ka pata hai ${profile.clinicAddress}.` : '';
 
@@ -424,9 +432,34 @@ async function processClinicalFallback(
 
   const targetDate = lower.includes('aaj') || lower.includes('today') ? today : tomorrow;
 
-  // 1. Reschedule Intent
-  if (lower.includes('reschedule') || lower.includes('badalna') || lower.includes('change')) {
-    const slots = await db.getAvailableSlots(primaryDoc.id, targetDate);
+  // 1. Gratitude / Acknowledgment / Farewell Intent (Strictly NO booking!)
+  const thanksKeywords = [
+    'thank you', 'thanks', 'dhanyawad', 'dhanyavad', 'shukriya', 'theek hai', 'thik hai',
+    'ok', 'okay', 'bye', 'alvida', 'thank u', 'थैंक यू', 'धन्यवाद', 'शुक्रिया', 'ठीक है', 'बाय'
+  ];
+  if (thanksKeywords.some((k) => lower.includes(k) || text.includes(k))) {
+    return {
+      replyText: `Aapka bahut-bahut swagat hai! Agar aapko koi aur sahayata chahiye ho to bataiye. ${clinicTitle} ki taraf se aapka din shubh ho!`,
+      actionTaken: 'none',
+      modelUsed: 'indic-clinical-engine',
+    };
+  }
+
+  // 2. Greeting Intent (Strictly NO booking!)
+  const greetingKeywords = ['namaste', 'hello', 'hi', 'kya haal', 'kaise ho', 'good morning', 'good evening', 'नमस्ते', 'हेलो', 'हाय'];
+  const hasBookingWord = ['book', 'appointment', 'milna', 'dikhana', 'checkup', 'apointment', 'अपॉइंटमेंट', 'बुक'].some((k) => lower.includes(k) || text.includes(k));
+  if (greetingKeywords.some((k) => lower.includes(k) || text.includes(k)) && !hasBookingWord) {
+    const docSummary = allDocs.map((d) => d.name).join(', ');
+    return {
+      replyText: `Namaste! ${clinicTitle} me aapka swagat hai. Main AI receptionist bol rahi hoon. Hamare yahan ${docSummary} uplabdh hain. Aapko appointment book karna hai ya timings check karni hai?`,
+      actionTaken: 'none',
+      modelUsed: 'indic-clinical-engine',
+    };
+  }
+
+  // 3. Reschedule Intent
+  if (lower.includes('reschedule') || lower.includes('badalna') || lower.includes('change') || lower.includes('badlo') || text.includes('बदलना')) {
+    const slots = await db.getAvailableSlots(targetDoc.id, targetDate);
     const newSlot = slots[0] || '11:00';
     const apts = await db.getAppointments();
     const existing = apts.find((a: Appointment) => a.status === 'CONFIRMED');
@@ -435,7 +468,7 @@ async function processClinicalFallback(
       if (res.success) {
         await emitOutboxEvent('appointment_rescheduled', res.appointment as any);
         return {
-          replyText: `Aapki appointment Dr. ${primaryDoc.name.replace('Dr. ', '')} ke sath ${targetDate} ko ${newSlot} baje reschedule ho gayi hai.`,
+          replyText: `Aapki appointment Dr. ${targetDoc.name.replace(/^Dr\.?\s*/i, '')} ke sath ${targetDate} ko ${newSlot} baje reschedule ho gayi hai.`,
           actionTaken: 'rescheduled',
           bookingData: res.appointment,
           modelUsed: 'indic-clinical-engine',
@@ -443,21 +476,21 @@ async function processClinicalFallback(
       }
     }
     return {
-      replyText: `Ji, reschedule karne ke liye ${targetDate} ko ${slots.slice(0, 3).join(', ')} ke slots uplabdh hain. Aapka phone number kya hai?`,
+      replyText: `Ji, reschedule karne ke liye ${targetDate} ko ${slots.slice(0, 3).join(', ')} ke slots uplabdh hain. Aap kis samay aana chahenge?`,
       actionTaken: 'slots_checked',
       modelUsed: 'indic-clinical-engine',
     };
   }
 
-  // 2. Cancel Intent
-  if (lower.includes('cancel') || lower.includes('radd') || lower.includes('nahi aana')) {
+  // 4. Cancel Intent
+  if (lower.includes('cancel') || lower.includes('radd') || lower.includes('nahi aana') || text.includes('कैंसिल') || text.includes('रद्द')) {
     const apts = await db.getAppointments();
     const existing = apts.find((a: Appointment) => a.status === 'CONFIRMED');
     if (existing) {
       await db.cancelAppointment(existing.id, 'Patient cancelled via call');
       await emitOutboxEvent('appointment_cancelled', { appointmentId: existing.id, reason: 'Patient cancelled' });
       return {
-        replyText: `Aapki appointment cancel kar di gayi hai. Agar aapko dobara book karna ho to bataiye.`,
+        replyText: `Aapki appointment cancel kar di gayi hai. Agar aapko dobara book karna ho to kripya bataiye.`,
         actionTaken: 'cancelled',
         modelUsed: 'indic-clinical-engine',
       };
@@ -469,64 +502,102 @@ async function processClinicalFallback(
     };
   }
 
-  // 3. Timing / Doctor Inquiry
-  if (lower.includes('timing') || lower.includes('samay') || lower.includes('kab') || lower.includes('doctor')) {
-    const docNames = doctors.map((d) => `${d.name} (${d.specialty})`).join(', ');
+  // 5. Timing / Doctor Details / Fees Inquiry (Strictly NO booking!)
+  if (lower.includes('timing') || lower.includes('samay') || lower.includes('kab') || lower.includes('fee') || lower.includes('fees') || lower.includes('kharcha') || lower.includes('address') || lower.includes('pata')) {
+    const docNames = allDocs.map((d) => `${d.name} (${d.specialty}, Fee: ₹${d.fee})`).join(', ');
     return {
-      replyText: `${clinicTitle} subah ${profile.openingTime || '09:00'} se shaam ${profile.closingTime || '18:00'} tak open hai.${docNames ? ' Hamare yahan ' + docNames + ' uplabdh hain.' : ''} Aapko kab appointment chahiye?`,
+      replyText: `${clinicTitle} subah ${profile.openingTime || '09:00'} se shaam ${profile.closingTime || '18:00'} tak open hai.${clinicLocStr} Hamare yahan ${docNames} uplabdh hain. Aapko kab appointment chahiye?`,
       actionTaken: 'none',
       modelUsed: 'indic-clinical-engine',
     };
   }
 
-  // 4. Booking Request
-  const slots = await db.getAvailableSlots(primaryDoc.id, targetDate);
-  const timeMatch = lower.match(/(\d{1,2})(:(\d{2}))?\s*(am|pm|baje)?/i);
-  let requestedTime = slots[0] || '10:00';
-
-  if (timeMatch) {
-    let hour = parseInt(timeMatch[1], 10);
-    const isPm = lower.includes('shaam') || lower.includes('pm') || lower.includes('dopahar');
-    if (isPm && hour < 12) hour += 12;
-    const formatted = `${String(hour).padStart(2, '0')}:00`;
-    if (slots.includes(formatted)) {
-      requestedTime = formatted;
+  // 6. Slots / Availability Inquiry (Strictly NO booking!)
+  if (lower.includes('available') || lower.includes('khaali') || lower.includes('khali') || lower.includes('slot') || text.includes('खाली')) {
+    const slots = await db.getAvailableSlots(targetDoc.id, targetDate);
+    if (slots.length > 0) {
+      return {
+        replyText: `${targetDate} ko Dr. ${targetDoc.name.replace(/^Dr\.?\s*/i, '')} ke ye slots uplabdh hain: ${slots.slice(0, 5).join(', ')}. Aapko kaunsa samay theek rahega?`,
+        actionTaken: 'slots_checked',
+        modelUsed: 'indic-clinical-engine',
+      };
+    } else {
+      return {
+        replyText: `Maaf kijiye, ${targetDate} ko Dr. ${targetDoc.name.replace(/^Dr\.?\s*/i, '')} ke sabhi slots bhare hue hain. Kripya kisi aur din ka slot chuniye.`,
+        actionTaken: 'slots_checked',
+        modelUsed: 'indic-clinical-engine',
+      };
     }
   }
 
-  // Extract patient name or default
-  let patientName = 'Amit Kumar';
-  if (lower.includes('mera naam')) {
-    const match = text.match(/mera naam ([a-zA-Z\s]+?)(?:hai|aur|\.|$)/i);
-    if (match) patientName = match[1].trim();
+  // 7. Booking Request (Requires explicit booking intent)
+  if (hasBookingWord || lower.includes('baje') || lower.includes(':')) {
+    const slots = await db.getAvailableSlots(targetDoc.id, targetDate);
+    if (slots.length === 0) {
+      return {
+        replyText: `Maaf kijiye, ${targetDate} ko Dr. ${targetDoc.name.replace(/^Dr\.?\s*/i, '')} ke koi slots uplabdh nahi hain.`,
+        actionTaken: 'none',
+        modelUsed: 'indic-clinical-engine',
+      };
+    }
+
+    const timeMatch = lower.match(/(\d{1,2})(:(\d{2}))?\s*(am|pm|baje)?/i);
+    let requestedTime = slots[0];
+
+    if (timeMatch) {
+      let hour = parseInt(timeMatch[1], 10);
+      const isPm = lower.includes('shaam') || lower.includes('pm') || lower.includes('dopahar');
+      if (isPm && hour < 12) hour += 12;
+      const formatted = `${String(hour).padStart(2, '0')}:00`;
+      if (slots.includes(formatted)) {
+        requestedTime = formatted;
+      }
+    }
+
+    // Extract patient name or default
+    let patientName = 'Patient';
+    if (lower.includes('mera naam')) {
+      const match = text.match(/mera naam ([a-zA-Z\s]+?)(?:hai|aur|\.|$)/i);
+      if (match) patientName = match[1].trim();
+    } else if (text.includes('मेरा नाम')) {
+      const match = text.match(/मेरा नाम ([^\s।,]+)/);
+      if (match) patientName = match[1].trim();
+    }
+
+    // Extract phone or default
+    let patientPhone = '9876543210';
+    const phoneMatch = text.match(/\b\d{10}\b/);
+    if (phoneMatch) patientPhone = phoneMatch[0];
+
+    const booking = await db.bookAppointment({
+      doctorId: targetDoc.id,
+      date: targetDate,
+      startTime: requestedTime,
+      patientName,
+      patientPhone,
+      idempotencyKey: `idem_fallback_${callId}_${targetDoc.id}_${targetDate}_${requestedTime}`,
+    });
+
+    if (booking.success && booking.appointment) {
+      await emitOutboxEvent('new_appointment', booking.appointment as any);
+      return {
+        replyText: `Aapki appointment ${targetDoc.name} ke sath ${targetDate} ko ${requestedTime} baje book ho gayi hai.${clinicLocStr} Kripya 10 minute pehle pahunchein.`,
+        actionTaken: 'booked',
+        bookingData: booking.appointment,
+        modelUsed: 'indic-clinical-engine',
+      };
+    } else {
+      return {
+        replyText: `Maaf kijiye, ${requestedTime} baje ka slot uplabdh nahi hai. ${slots.slice(0, 3).join(', ')} me se kaunsa samay theek rahega?`,
+        actionTaken: 'none',
+        modelUsed: 'indic-clinical-engine',
+      };
+    }
   }
 
-  // Extract phone or default
-  let patientPhone = '9876543210';
-  const phoneMatch = text.match(/\b\d{10}\b/);
-  if (phoneMatch) patientPhone = phoneMatch[0];
-
-  const booking = await db.bookAppointment({
-    doctorId: primaryDoc.id,
-    date: targetDate,
-    startTime: requestedTime,
-    patientName,
-    patientPhone,
-    idempotencyKey: `idem_fallback_${callId}_${primaryDoc.id}_${targetDate}_${requestedTime}`,
-  });
-
-  if (booking.success && booking.appointment) {
-    await emitOutboxEvent('new_appointment', booking.appointment as any);
-    return {
-      replyText: `Aapki appointment ${primaryDoc.name} ke sath ${targetDate} ko ${requestedTime} baje book ho gayi hai.${clinicLocStr} Kripya 10 minute pehle pahunchein.`,
-      actionTaken: 'booked',
-      bookingData: booking.appointment,
-      modelUsed: 'indic-clinical-engine',
-    };
-  }
-
+  // 8. Default fallback for ambiguous or conversational input (Strictly NO booking!)
   return {
-    replyText: `Namaste! ${clinicTitle} mein aapka swagat hai. Main AI receptionist bol rahi hoon. Aapko kis doctor ke paas appointment chahiye?`,
+    replyText: `Main samajh rahi hoon. ${clinicTitle} me Dr. ${targetDoc.name.replace(/^Dr\.?\s*/i, '')} ke sath appointment book karne ke liye kripya apna pasandeeda samay bataiye, jaise kal subah 10 baje.`,
     actionTaken: 'none',
     modelUsed: 'indic-clinical-engine',
   };

@@ -169,6 +169,12 @@ export class GnaniTTSClient implements ITTSClient {
         const arrayBuffer = await response.arrayBuffer();
         const audioBuffer = Buffer.from(arrayBuffer);
 
+        // Normalize Gnani streaming WAV headers for web browser playback
+        if (audioBuffer.length >= 44 && audioBuffer.slice(0, 4).toString('ascii') === 'RIFF') {
+          audioBuffer.writeUInt32LE(audioBuffer.length - 8, 4);
+          audioBuffer.writeUInt32LE(audioBuffer.length - 44, 40);
+        }
+
         // Record verified spend
         globalCostMeter.recordSpend(callId, 'TIMBRE_TTS', characterCount, false);
 

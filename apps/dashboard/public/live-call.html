@@ -807,6 +807,9 @@
       async function startVoiceCall() {
         if (isCallActive) return;
 
+        // Unlock browser audio context on user gesture
+        unlockAudioContext();
+
         // Reset state
         isCallActive = true;
         isMuted = false;
@@ -1013,7 +1016,7 @@
             // 4. Play Gnani Timbre Speech Synthesis
             if (data.audioBase64) {
               setCallStatus('🔊 Receptionist Bol Rahi Hai...', true);
-              await playAudioBase64(data.audioBase64);
+              await playAudioBase64(data.audioBase64, replyText);
             } else {
               await speakTextWithGnani(replyText);
             }
@@ -1034,33 +1037,98 @@
       }
 
       // ==========================================
-      // GNANI TIMBRE AUDIO PLAYBACK
+      // GNANI TIMBRE AUDIO PLAYBACK & FALLBACK
       // ==========================================
-      function playAudioBase64(audioBase64) {
+      const audioStore = new Map();
+
+      function base64ToBlob(base64Data, contentType = 'audio/wav') {
+        const base64Clean = base64Data.replace(/^data:audio\/\w+;base64,/, '');
+        const byteCharacters = atob(base64Clean);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        return new Blob([byteArray], { type: contentType });
+      }
+
+      function unlockAudioContext() {
+        try {
+          if (window.AudioContext || window.webkitAudioContext) {
+            if (!window.globalAudioCtx) {
+              window.globalAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (window.globalAudioCtx.state === 'suspended') {
+              window.globalAudioCtx.resume();
+            }
+          }
+        } catch (e) {
+          console.warn('AudioContext unlock:', e);
+        }
+      }
+
+      function playAudioBase64(audioBase64, fallbackText = '') {
         return new Promise((resolve) => {
-          if (!audioBase64) return resolve();
+          if (!audioBase64) {
+            if (fallbackText) {
+              speakWithWebSpeechFallback(fallbackText).then(resolve);
+            } else {
+              resolve();
+            }
+            return;
+          }
+
           try {
+            unlockAudioContext();
             isAgentSpeaking = true;
             if (currentAudioPlayer) {
               currentAudioPlayer.pause();
+              currentAudioPlayer = null;
             }
-            const audio = new Audio(audioBase64);
+
+            const blob = base64ToBlob(audioBase64, 'audio/wav');
+            const blobUrl = URL.createObjectURL(blob);
+            const audio = new Audio(blobUrl);
             currentAudioPlayer = audio;
+
             audio.onended = () => {
               isAgentSpeaking = false;
+              URL.revokeObjectURL(blobUrl);
               resolve();
             };
-            audio.onerror = () => {
-              isAgentSpeaking = false;
-              resolve();
+
+            audio.onerror = (e) => {
+              console.warn('[Audio Player] Error playing Gnani audio, invoking Web Speech fallback:', e);
+              URL.revokeObjectURL(blobUrl);
+              if (fallbackText) {
+                speakWithWebSpeechFallback(fallbackText).then(resolve);
+              } else {
+                isAgentSpeaking = false;
+                resolve();
+              }
             };
-            audio.play().catch(() => {
-              isAgentSpeaking = false;
-              resolve();
-            });
+
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+              playPromise.catch((err) => {
+                console.warn('[Audio Player] Play promise rejected (autoplay policy?):', err);
+                URL.revokeObjectURL(blobUrl);
+                if (fallbackText) {
+                  speakWithWebSpeechFallback(fallbackText).then(resolve);
+                } else {
+                  isAgentSpeaking = false;
+                  resolve();
+                }
+              });
+            }
           } catch (e) {
-            isAgentSpeaking = false;
-            resolve();
+            console.warn('[Audio Player] Exception during playback:', e);
+            if (fallbackText) {
+              speakWithWebSpeechFallback(fallbackText).then(resolve);
+            } else {
+              isAgentSpeaking = false;
+              resolve();
+            }
           }
         });
       }
@@ -1075,7 +1143,7 @@
           if (res.ok) {
             const data = await res.json();
             if (data.audioBase64) {
-              await playAudioBase64(data.audioBase64);
+              await playAudioBase64(data.audioBase64, text);
               return;
             }
           }
@@ -1083,22 +1151,48 @@
           console.warn('Gnani TTS error, falling back:', e);
         }
 
-        // Web Speech synthesis fallback if network fails
+        // Web Speech synthesis fallback
+        await speakWithWebSpeechFallback(text);
+      }
+
+      function speakWithWebSpeechFallback(text) {
         return new Promise((resolve) => {
           if (!window.speechSynthesis) return resolve();
-          isAgentSpeaking = true;
-          const u = new SpeechSynthesisUtterance(text);
-          u.lang = 'hi-IN';
-          u.onend = () => {
+          try {
+            isAgentSpeaking = true;
+            window.speechSynthesis.cancel();
+            const cleanText = text.replace(/[*#_~`]/g, '');
+            const u = new SpeechSynthesisUtterance(cleanText);
+            u.lang = 'hi-IN';
+            u.rate = 1.0;
+            u.pitch = 1.0;
+
+            const voices = window.speechSynthesis.getVoices();
+            const hindiVoice = voices.find((v) => v.lang.includes('hi') || v.lang.includes('IN'));
+            if (hindiVoice) u.voice = hindiVoice;
+
+            u.onend = () => {
+              isAgentSpeaking = false;
+              resolve();
+            };
+            u.onerror = () => {
+              isAgentSpeaking = false;
+              resolve();
+            };
+            window.speechSynthesis.speak(u);
+          } catch (e) {
             isAgentSpeaking = false;
             resolve();
-          };
-          u.onerror = () => {
-            isAgentSpeaking = false;
-            resolve();
-          };
-          window.speechSynthesis.speak(u);
+          }
         });
+      }
+
+      function replayAudio(msgId) {
+        const item = audioStore.get(msgId);
+        if (item) {
+          setCallStatus('🔊 Receptionist Bol Rahi Hai...', true);
+          playAudioBase64(item.audioBase64, item.text);
+        }
       }
 
       // ==========================================
@@ -1123,7 +1217,11 @@
         const row = document.createElement('div');
         row.className = 'msg-row assistant';
         const formatted = formatMarkdown(text);
-        const audioAttr = audioBase64 ? `data-audio="${audioBase64}"` : '';
+        const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+
+        if (audioBase64) {
+          audioStore.set(msgId, { audioBase64, text });
+        }
 
         row.innerHTML = `
           <div class="assistant-avatar">🩺</div>
@@ -1136,7 +1234,7 @@
             ${
               audioBase64
                 ? `<div class="msg-actions">
-                    <button class="btn-action-small" onclick="playAudioBase64('${audioBase64}')">
+                    <button class="btn-action-small" onclick="replayAudio('${msgId}')">
                       🔊 Replay Voice
                     </button>
                   </div>`

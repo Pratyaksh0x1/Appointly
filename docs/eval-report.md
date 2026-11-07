@@ -1,6 +1,6 @@
 # Appointly Conversational AI Evaluation Report
 
-**Generated:** 2026-11-07T18:51:40.841Z  
+**Generated:** 2026-11-07T19:04:24.051Z  
 **Dataset:** 50+ Hinglish Clinical Telephony Scenarios  
 **Evaluation Mode:** Orchestrator + Deterministic Safety Guardrails + Mock Adapters  
 

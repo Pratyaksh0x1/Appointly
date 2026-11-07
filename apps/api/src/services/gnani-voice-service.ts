@@ -161,6 +161,16 @@ export async function synthesizeSpeechWithGnani(
 
     const arrayBuffer = await res.arrayBuffer();
     const audioBuffer = Buffer.from(arrayBuffer);
+
+    // CRITICAL BROWSER AUDIO COMPATIBILITY FIX:
+    // Gnani Timbre TTS sets 0xFFFFFFFF (4294967295) for streaming chunk sizes.
+    // Standard web browsers (Chrome, Safari, Edge) reject this as invalid WAV and refuse to play.
+    // Patch RIFF total size and Subchunk2 (data) size with actual byte lengths:
+    if (audioBuffer.length >= 44 && audioBuffer.slice(0, 4).toString('ascii') === 'RIFF') {
+      audioBuffer.writeUInt32LE(audioBuffer.length - 8, 4);
+      audioBuffer.writeUInt32LE(audioBuffer.length - 44, 40);
+    }
+
     const audioBase64 = `data:audio/wav;base64,${audioBuffer.toString('base64')}`;
     const durationEstimateMs = Math.round((audioBuffer.length / (16000 * 2)) * 1000);
 
