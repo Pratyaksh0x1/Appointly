@@ -130,6 +130,27 @@ export const envSchema = z.object({
     .string()
     .default('500')
     .transform((val) => parseInt(val, 10)),
+
+  // Phase 8: Reliability & Security Hardening
+  CORS_ORIGIN: z
+    .string()
+    .default('http://localhost:3000,http://127.0.0.1:3000,http://localhost:3099'),
+  TRANSCRIPT_RETENTION_DAYS: z
+    .string()
+    .default('30')
+    .transform((val) => parseInt(val, 10)),
+  STORE_RAW_AUDIO: z
+    .string()
+    .default('false')
+    .transform((val) => val === 'true'),
+  RATE_LIMIT_MAX_PER_MINUTE: z
+    .string()
+    .default('120')
+    .transform((val) => parseInt(val, 10)),
+  MAX_REQUEST_SIZE_BYTES: z
+    .string()
+    .default('1048576')
+    .transform((val) => parseInt(val, 10)),
 });
 
 export type EnvConfig = z.infer<typeof envSchema>;

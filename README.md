@@ -9,7 +9,123 @@ Appointly is an empathetic, multilingual voice assistant designed for small clin
 
 ---
 
-## Phase 5: Realtime Voice Pipeline & Latency Optimization Highlights
+## Phase 8: Reliability, Security Hardening & Chaos Testing Highlights
+
+- **Idempotency Keys on All Mutating Endpoints**:
+  - Mutating routes (`POST /api/chat`, `PUT /api/appointments/:id/reschedule`, `PUT /api/appointments/:id/cancel`) support `Idempotency-Key` and `X-Idempotency-Key` headers.
+  - Replays cached responses with `X-Cache-Lookup: HIT` and `X-Idempotency-Replay: true`, returning HTTP 409 Conflict for in-flight duplicates and bypassing re-execution of side effects.
+- **Transactional Outbox with Retry & Dead-Letter Status**:
+  - The `outbox` table tracks `retry_count`, `max_retries` (default 3), and `last_error`.
+  - Concurrently polled with PostgreSQL `FOR UPDATE SKIP LOCKED`. If an event exceeds maximum retries, it transitions safely to `'DEAD_LETTER'` without blocking the relay queue.
+- **Sliding-Window Rate Limiting (Per-IP & Per-Session)**:
+  - Enforces configurable rate limits (`RATE_LIMIT_MAX_PER_MINUTE`, default 120 req/min) per client IP and per session/doctor Bearer token.
+  - Returns HTTP 429 (`TOO_MANY_REQUESTS`) with standard `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `Retry-After` headers.
+- **Request Body Size Limits & Deep Input Sanitization**:
+  - Enforces `MAX_REQUEST_SIZE_BYTES` (1MB default), destroying oversized streams with HTTP 413 (`PAYLOAD_TOO_LARGE`).
+  - Defense-in-depth sanitization: strips null bytes (`\0`), ASCII control characters, and object prototype properties (`__proto__`, `constructor`, `prototype`).
+- **Enterprise Security Headers & Dynamic CORS Allowlist**:
+  - Strict enterprise headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`, `Strict-Transport-Security: max-age=31536000`, `Content-Security-Policy`, and `Permissions-Policy`.
+  - Dynamic allowlist origin checking via `CORS_ORIGIN` with `Vary: Origin`.
+- **Least-Privilege Database Roles Architecture**:
+  - Dual-role database security separating migration DDL (`appointly_admin`) from application runtime DML (`appointly_app` with `SELECT`, `INSERT`, `UPDATE`, `DELETE` only, no `DROP`/`ALTER`/`TRUNCATE`). Documented in [`docs/db-roles.md`](docs/db-roles.md) and [`scripts/setup-least-privilege-db-roles.sql`](scripts/setup-least-privilege-db-roles.sql).
+- **Automated PII & Secret Redaction in Logs & Transcripts**:
+  - Automatically masks phone numbers (`+91 ******<last4>`), 12-digit Aadhaar IDs (`****-****-****`), email addresses (`u***r@domain.com`), and Bearer tokens (`Bearer [REDACTED]`).
+  - Zero raw PII or credentials printed in application logs or stored call summaries.
+- **DPDP-Compliant Transcript Retention Worker**:
+  - Configurable retention job (`TRANSCRIPT_RETENTION_DAYS`, default 30 days) automatically purges call records older than the retention threshold.
+- **Zero Raw Audio Storage Policy**:
+  - Microphone audio chunks are processed strictly in RAM buffers for VAD and STT streaming, then immediately garbage collected. Zero raw audio files (`.wav`, `.pcm`, `.raw`) touch disk (`STORE_RAW_AUDIO=false`).
+- **Graceful Degradation Protocols**:
+  - *Voice Agent*: If STT, LLM, or TTS fail or time out, the server plays a pre-cached Hinglish apology audio chunk (`FIXED_PHRASES.FALLBACK`), persists a `callback_request` in Neon PostgreSQL, and tears down the call cleanly.
+  - *Doctor Dashboard*: If SSE connection drops, the UI automatically engages a 5-second polling fallback with badge indicator `"Polling Active (Fallback)"`, restoring `"Neon Postgres Live"` upon reconnect.
+- **Comprehensive STRIDE-Lite Threat Model**:
+  - Detailed in [`docs/threat-model.md`](docs/threat-model.md) analyzing Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, and Elevation of Privilege with honest mitigations and residual risks.
+- **50 Concurrent Calls Load Test & Chaos Test Suite**:
+  - Benchmark report in [`docs/load-test.md`](docs/load-test.md): 50 concurrent calls, 150 conversational turns completed in 7.33s with 7.2 calls/sec throughput and **0% error rate**.
+  - All automated chaos tests pass in `apps/api/tests/chaos-and-resilience.test.ts`.
+
+---
+
+## Phase 8: Reliability, Security Hardening & Chaos Testing Highlights
+
+- **Idempotency Keys on All Mutating Endpoints**:
+  - Mutating routes (`POST /api/chat`, `PUT /api/appointments/:id/reschedule`, `PUT /api/appointments/:id/cancel`) support `Idempotency-Key` and `X-Idempotency-Key` headers.
+  - Replays cached responses with `X-Cache-Lookup: HIT` and `X-Idempotency-Replay: true`, returning HTTP 409 Conflict for in-flight duplicates and bypassing re-execution of side effects.
+- **Transactional Outbox with Retry & Dead-Letter Status**:
+  - The `outbox` table tracks `retry_count`, `max_retries` (default 3), and `last_error`.
+  - Concurrently polled with PostgreSQL `FOR UPDATE SKIP LOCKED`. If an event exceeds maximum retries, it transitions safely to `'DEAD_LETTER'` without blocking the relay queue.
+- **Sliding-Window Rate Limiting (Per-IP & Per-Session)**:
+  - Enforces configurable rate limits (`RATE_LIMIT_MAX_PER_MINUTE`, default 120 req/min) per client IP and per session/doctor Bearer token.
+  - Returns HTTP 429 (`TOO_MANY_REQUESTS`) with standard `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `Retry-After` headers.
+- **Request Body Size Limits & Deep Input Sanitization**:
+  - Enforces `MAX_REQUEST_SIZE_BYTES` (1MB default), destroying oversized streams with HTTP 413 (`PAYLOAD_TOO_LARGE`).
+  - Defense-in-depth sanitization: strips null bytes (`\0`), ASCII control characters, and object prototype properties (`__proto__`, `constructor`, `prototype`).
+- **Enterprise Security Headers & Dynamic CORS Allowlist**:
+  - Strict enterprise headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`, `Strict-Transport-Security: max-age=31536000`, `Content-Security-Policy`, and `Permissions-Policy`.
+  - Dynamic allowlist origin checking via `CORS_ORIGIN` with `Vary: Origin`.
+- **Least-Privilege Database Roles Architecture**:
+  - Dual-role database security separating migration DDL (`appointly_admin`) from application runtime DML (`appointly_app` with `SELECT`, `INSERT`, `UPDATE`, `DELETE` only, no `DROP`/`ALTER`/`TRUNCATE`). Documented in [`docs/db-roles.md`](docs/db-roles.md) and [`scripts/setup-least-privilege-db-roles.sql`](scripts/setup-least-privilege-db-roles.sql).
+- **Automated PII & Secret Redaction in Logs & Transcripts**:
+  - Automatically masks phone numbers (`+91 ******<last4>`), 12-digit Aadhaar IDs (`****-****-****`), email addresses (`u***r@domain.com`), and Bearer tokens (`Bearer [REDACTED]`).
+  - Zero raw PII or credentials printed in application logs or stored call summaries.
+- **DPDP-Compliant Transcript Retention Worker**:
+  - Configurable retention job (`TRANSCRIPT_RETENTION_DAYS`, default 30 days) automatically purges call records older than the retention threshold.
+- **Zero Raw Audio Storage Policy**:
+  - Microphone audio chunks are processed strictly in RAM buffers for VAD and STT streaming, then immediately garbage collected. Zero raw audio files (`.wav`, `.pcm`, `.raw`) touch disk (`STORE_RAW_AUDIO=false`).
+- **Graceful Degradation Protocols**:
+  - _Voice Agent_: If STT, LLM, or TTS fail or time out, the server plays a pre-cached Hinglish apology audio chunk (`FIXED_PHRASES.FALLBACK`), persists a `callback_request` in Neon PostgreSQL, and tears down the call cleanly.
+  - _Doctor Dashboard_: If SSE connection drops, the UI automatically engages a 5-second polling fallback with badge indicator `"Polling Active (Fallback)"`, restoring `"Neon Postgres Live"` upon reconnect.
+- **Comprehensive STRIDE-Lite Threat Model**:
+  - Detailed in [`docs/threat-model.md`](docs/threat-model.md) analyzing Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, and Elevation of Privilege with honest mitigations and residual risks.
+- **50 Concurrent Calls Load Test & Chaos Test Suite**:
+  - Benchmark report in [`docs/load-test.md`](docs/load-test.md): 50 concurrent calls, 150 conversational turns completed in 7.33s with 7.2 calls/sec throughput and **0% error rate**.
+  - All automated chaos tests pass in `apps/api/tests/chaos-and-resilience.test.ts`.
+
+---
+
+## Phase 7: Patient Confirmation, Lifecycle & Edge Case Highlights
+
+- **Post-Commit Spoken Readback with Clinic Arrival Instructions**:
+  - The voice agent says _"booked"_ strictly **after** database transaction commit (Non-negotiable Rule 1).
+  - Spoken confirmation readback in patient's language mix (Hinglish) states Doctor, Date, Time, Duration, and clinic instructions:
+    _“Kripya clinic samay se 10 minute pehle pahunchein, aur apna purana prescription ya medical records aur identity proof sath layein.”_
+- **Voice Reschedule & Cancel with Caller Verification (Zero PHI Leakage)**:
+  - Callers asking to modify or cancel appointments must verify identity via **Patient Name + Last 4 digits of phone number**.
+  - **Zero PHI Leakage Guarantee**: Unverified callers never receive doctor name, appointment dates, or times (`VERIFICATION_FAILED_NO_PHI`).
+  - Verified callers can reschedule to an open slot or cancel atomically with full slot freeing and outbox broadcast.
+- **Outbound Reminders (24h & 2h before) via Transactional Outbox**:
+  - Driven by the `outbox` table with PostgreSQL `FOR UPDATE SKIP LOCKED` to prevent duplicate dispatching across concurrent workers.
+  - Pluggable provider interface `IReminderProvider` with `SimulatedReminderProvider` generating natural Hinglish IVR speech calls and SMS text scripts.
+- **Doctor Call Summaries with Strict Non-Diagnostic Guarantee (Rule 4)**:
+  - Extracted verbatim from patient speech turns (e.g. _“pet bahut kharab hai aur ulti jaisa lag raha hai”_), explicitly tagged as non-diagnostic notes.
+  - Tagged with structured `CallOutcome` (`BOOKED`, `RESCHEDULED`, `CANCELLED`, `CALLBACK_SAVED`, `EMERGENCY_ESCALATED`, `CALL_DROPPED`, `PATIENT_SILENT_DISCONNECT`).
+  - Displayed in the doctor dashboard under **🩺 AI Call Summaries** with live SSE broadcast.
+- **5 Telephony Edge Cases Handled**:
+  - _Mind-Change Mid-Call_: Automatically releases active slot holds in DB and resets slot selection for the new preference.
+  - _Ambiguous Time Preference_: Vague requests (_“shaam ko”_) are resolved to time windows and strictly offer at most 2 concrete slots.
+  - _No Slots Available_: Scans the next 2 clinic days for open slots or saves a callback request.
+  - _Patient Silence_: Progressive polite prompts on Turn 1 & Turn 2, graceful disconnect on Turn 3.
+  - _Dropped Call Cleanup_: Immediately releases holds on disconnect; zero ghost bookings created.
+
+---
+
+## Phase 6: Doctor Dashboard, Auth & Realtime Outbox Highlights
+
+- **Cryptographically Signed HMAC-SHA256 JWT Authentication**:
+  - Protected doctor routes guarded by `requireDoctorAuth` middleware.
+  - Supports Google Auth (`POST /api/auth/google`) and One-Click Doctor Demo Login (`POST /api/auth/dev-login`) for quick offline testing.
+- **Sub-2-Second Live Updates via Dual SSE Outbox Relay**:
+  - Real-time updates for new bookings, reschedules, cancellations, doctor schedule changes, and emergency alerts without manual refresh.
+- **Doctor Dashboard Capabilities**:
+  - Live Today & Upcoming Appointments list with status badges (`CONFIRMED`, `COMPLETED`, `CANCELLED`).
+  - Interactive Day OPD Schedule Grid and time slot distribution.
+  - Emergency / Escalation alert banner with audible warning and 108 protocol instructions.
+  - Reception Callback Requests list with 1-click resolve button.
+  - Live AI Call Summaries viewer with verbatim patient concerns.
+  - Live Credits Used counter against the 5,000 credit cap.
+  - Mobile-responsive design with dark clinical theme and WCAG accessibility standards.
+
+---
 
 - **Authenticated Two-Way WebSocket Pipeline (`/ws/voice`)**:
   - Browser streams 16kHz PCM audio chunks; server streams back sentence-chunked TTS audio frames and event messages (`session_ready`, `transcript`, `state`, `agent_text`, `filler`, `interrupt`, `latency`).
@@ -139,7 +255,7 @@ appointly/
 │   └── dashboard/            # Minimalist Doctor Dashboard (Live SSE, OPD Roster, Simulator)
 ├── packages/
 │   └── shared/               # Shared domain types, Zod validation schemas & clinic constants
-├── docs/adr/                 # Architecture Decision Records (ADR-001 to ADR-006)
+├── docs/adr/                 # Architecture Decision Records (ADR-001 to ADR-010)
 ├── .github/workflows/ci.yml  # GitHub Actions CI (lint, typecheck, test, audit, gitleaks)
 ├── Makefile                  # Developer workflow automation
 ├── neon.ts                   # Neon project configuration & branch policy
@@ -187,7 +303,7 @@ npm run typecheck
 # Code formatting and linting
 npm run lint
 
-# Run all 112 Vitest unit, state machine, latency & concurrency tests across 15 test suites
+# Run all 135 Vitest unit, state machine, latency, lifecycle & concurrency tests across 17 test suites
 npm test
 
 # Run database migration & seed on Neon
@@ -207,23 +323,30 @@ Open **[http://localhost:3000](http://localhost:3000)** in your browser to view 
 
 ## Endpoints Reference
 
-| Endpoint                    | Method    | Purpose                                                                                                                               |
-| :-------------------------- | :-------- | :------------------------------------------------------------------------------------------------------------------------------------ |
-| `/healthz`                  | GET       | Liveness probe (returns HTTP 200 `{ status: "ok" }`)                                                                                  |
-| `/readyz`                   | GET       | Readiness probe (verifies database connectivity and returns status)                                                                   |
-| `/health`                   | GET       | Detailed health check (database status, doctors loaded, credit budget summary)                                                        |
-| `/api/doctors`              | GET       | Lists clinic doctors, specialties, fees, and consultation durations                                                                   |
-| `/api/doctors/:id/schedule` | PUT, POST | Updates doctor's OPD timing (e.g. 17:00 to 22:00) and broadcasts live SSE event to doctor dashboards                                  |
-| `/api/slots`                | GET       | Retrieves open slots for a doctor on a specific date (`?doctorId=dr_sharma&date=YYYY-MM-DD`)                                          |
-| `/api/appointments`         | GET       | Retrieves all confirmed appointments for the doctor dashboard                                                                         |
-| `/api/callbacks`            | GET       | Retrieves saved receptionist callback tickets                                                                                         |
-| `/api/cost`                 | GET       | Live cost meter metrics against the 5,000 credit budget                                                                               |
-| `/api/voice/session`        | POST      | Generates short-lived, rate-limited single-use token (`vtok_...`) for secure WebSocket authentication                                 |
-| `/api/voice/latency`        | GET       | Retrieves real-time P50 and P95 latency percentiles across STT, LLM TTFT, TTS, and total voice turns                                  |
-| `/voice-test.html`          | GET       | Live Voice Agent testing interface with microphone capture, real-time waveform states, transcript, and latency telemetry debug        |
-| `/ws/voice`                 | WebSocket | Authenticated full-duplex voice pipeline (PCM audio in $\rightarrow$ VAD $\rightarrow$ STT $\rightarrow$ Brain $\rightarrow$ TTS out) |
-| `/api/chat`                 | POST      | Conversational endpoint (Emergency check $\rightarrow$ Evon LLM $\rightarrow$ Tool calling $\rightarrow$ Neon DB transaction)         |
-| `/api/dashboard/stream`     | GET       | Server-Sent Events (SSE) stream for real-time doctor dashboard updates                                                                |
+| Endpoint                           | Method    | Purpose                                                                                                                               |
+| :--------------------------------- | :-------- | :------------------------------------------------------------------------------------------------------------------------------------ |
+| `/healthz`                         | GET       | Liveness probe (returns HTTP 200 `{ status: "ok" }`)                                                                                  |
+| `/readyz`                          | GET       | Readiness probe (verifies database connectivity and returns status)                                                                   |
+| `/health`                          | GET       | Detailed health check (database status, doctors loaded, credit budget summary)                                                        |
+| `/api/auth/google`                 | POST      | Doctor login via Google Identity Services token                                                                                       |
+| `/api/auth/dev-login`              | POST      | One-click doctor demo login for offline testing and hackathon judging                                                                 |
+| `/api/doctors`                     | GET       | Lists clinic doctors, specialties, fees, and consultation durations                                                                   |
+| `/api/doctors/:id/schedule`        | PUT, POST | Updates doctor's OPD timing (e.g. 17:00 to 22:00) and broadcasts live SSE event to doctor dashboards                                  |
+| `/api/slots`                       | GET       | Retrieves open slots for a doctor on a specific date (`?doctorId=dr_sharma&date=YYYY-MM-DD`)                                          |
+| `/api/appointments`                | GET       | Protected doctor route: retrieves all confirmed appointments with filtering                                                           |
+| `/api/appointments/:id/reschedule` | PUT       | Protected doctor route: reschedules an existing appointment                                                                           |
+| `/api/appointments/:id/cancel`     | PUT       | Protected doctor route: cancels an appointment and frees the slot                                                                     |
+| `/api/appointments/:id/complete`   | PUT       | Protected doctor route: marks consultation completed                                                                                  |
+| `/api/callbacks`                   | GET       | Protected doctor route: retrieves saved receptionist callback tickets                                                                 |
+| `/api/callbacks/:id/resolve`       | PUT       | Protected doctor route: marks a callback request resolved                                                                             |
+| `/api/calls`                       | GET       | Protected doctor route: retrieves doctor call summaries with verbatim non-diagnostic patient concerns                                 |
+| `/api/cost`                        | GET       | Live cost meter metrics against the 5,000 credit budget                                                                               |
+| `/api/voice/session`               | POST      | Generates short-lived, rate-limited single-use token (`vtok_...`) for secure WebSocket authentication                                 |
+| `/api/voice/latency`               | GET       | Retrieves real-time P50 and P95 latency percentiles across STT, LLM TTFT, TTS, and total voice turns                                  |
+| `/voice-test.html`                 | GET       | Live Voice Agent testing interface with microphone capture, real-time waveform states, transcript, and latency telemetry debug        |
+| `/ws/voice`                        | WebSocket | Authenticated full-duplex voice pipeline (PCM audio in $\rightarrow$ VAD $\rightarrow$ STT $\rightarrow$ Brain $\rightarrow$ TTS out) |
+| `/api/chat`                        | POST      | Conversational endpoint (Emergency check $\rightarrow$ Evon LLM $\rightarrow$ Tool calling $\rightarrow$ Neon DB transaction)         |
+| `/api/dashboard/stream`            | GET       | Server-Sent Events (SSE) stream for real-time doctor dashboard updates (appointments, alerts, callbacks, summaries)                   |
 
 ---
 

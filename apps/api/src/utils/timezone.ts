@@ -64,7 +64,10 @@ export function kolkataToUtc(dateStr: string, timeStr: string): Date {
  * Formats a UTC Date into Asia/Kolkata date, time, and readable labels.
  */
 export function formatKolkata(dateInput: Date | string | number): KolkataFormattedTime {
-  const d = typeof dateInput === 'object' ? dateInput : new Date(dateInput);
+  if (!dateInput) {
+    throw new Error(`Invalid Date passed to formatKolkata: ${dateInput}`);
+  }
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
 
   if (isNaN(d.getTime())) {
     throw new Error(`Invalid Date passed to formatKolkata: ${dateInput}`);

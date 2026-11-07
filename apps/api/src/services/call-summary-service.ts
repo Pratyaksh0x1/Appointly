@@ -10,7 +10,7 @@
  */
 
 import { DoctorCallSummary, CallOutcome } from '../types/index.js';
-import { maskPhone, rootLogger } from '../logger/logger.js';
+import { maskPhone, maskName, redactPiiFromTranscript, rootLogger } from '../logger/logger.js';
 import { getDatabaseClient } from '../db/index.js';
 
 export interface GenerateSummaryParams {
@@ -74,15 +74,17 @@ export function extractPatientConcernInOwnWords(
     const lower = msg.toLowerCase();
     for (const kw of symptomKeywords) {
       if (lower.includes(kw)) {
-        // Return raw patient words, with explicit non-diagnostic notice
-        return `"${msg}" (Caller's verbatim words; non-diagnostic)`;
+        // Return patient words with PII scrubbed, and explicit non-diagnostic notice
+        const cleanMsg = redactPiiFromTranscript(msg);
+        return `"${cleanMsg}" (Caller's verbatim words; non-diagnostic)`;
       }
     }
   }
 
   // Default to first substantive user statement
   const firstSubstantive = userMessages.find((m) => m.length > 4) || userMessages[0];
-  return `"${firstSubstantive}" (Caller's verbatim statement; non-diagnostic)`;
+  const cleanFirst = redactPiiFromTranscript(firstSubstantive);
+  return `"${cleanFirst}" (Caller's verbatim statement; non-diagnostic)`;
 }
 
 export function determineCallOutcome(params: GenerateSummaryParams): CallOutcome {

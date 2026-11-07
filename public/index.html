@@ -2203,7 +2203,30 @@
         document.getElementById('emergencyBanner').style.display = 'none';
       }
 
-      // Live Server-Sent Events (SSE) with Outbox Relay & Reconnection
+      // Live Server-Sent Events (SSE) with Outbox Relay, Reconnection & Polling Fallback
+      let sseFallbackPollingTimer = null;
+
+      function startSsePollingFallback() {
+        if (sseFallbackPollingTimer) return;
+        console.warn('⚠️ SSE stream disconnected. Engaging 5s polling fallback.');
+        const statusText = document.getElementById('sseStatusText');
+        const dot = document.querySelector('#sseStatus .status-dot');
+        if (statusText) statusText.textContent = 'Polling Active (Fallback)';
+        if (dot) dot.style.background = 'var(--warning)';
+
+        sseFallbackPollingTimer = setInterval(() => {
+          fetchStats();
+          fetchCallSummaries();
+        }, 5000);
+      }
+
+      function stopSsePollingFallback() {
+        if (sseFallbackPollingTimer) {
+          clearInterval(sseFallbackPollingTimer);
+          sseFallbackPollingTimer = null;
+        }
+      }
+
       function setupLiveSSE() {
         if (sseConnection) {
           sseConnection.close();
@@ -2217,12 +2240,16 @@
         sseConnection = new EventSource(url);
 
         sseConnection.addEventListener('connected', (e) => {
-          document.getElementById('sseStatusText').textContent = 'Neon Postgres Live';
-          document.querySelector('#sseStatus .status-dot').style.background = 'var(--accent)';
+          stopSsePollingFallback();
+          const statusText = document.getElementById('sseStatusText');
+          const dot = document.querySelector('#sseStatus .status-dot');
+          if (statusText) statusText.textContent = 'Neon Postgres Live';
+          if (dot) dot.style.background = 'var(--accent)';
         });
 
         // 1. Instant New Booking Event
         sseConnection.addEventListener('new_appointment', (e) => {
+          stopSsePollingFallback();
           const apt = JSON.parse(e.data);
           console.log('⚡ Instant appointment received via SSE:', apt);
           fetchStats();
@@ -2230,6 +2257,7 @@
 
         // 2. Rescheduled Event
         sseConnection.addEventListener('appointment_rescheduled', (e) => {
+          stopSsePollingFallback();
           const apt = JSON.parse(e.data);
           console.log('⚡ Appointment rescheduled via SSE:', apt);
           fetchStats();
@@ -2237,6 +2265,7 @@
 
         // 3. Cancelled Event
         sseConnection.addEventListener('appointment_cancelled', (e) => {
+          stopSsePollingFallback();
           const apt = JSON.parse(e.data);
           console.log('⚡ Appointment cancelled via SSE:', apt);
           fetchStats();
@@ -2244,17 +2273,20 @@
 
         // 4. Completed Event
         sseConnection.addEventListener('appointment_completed', (e) => {
+          stopSsePollingFallback();
           fetchStats();
         });
 
         // 5. Emergency 108 Alert Event
         sseConnection.addEventListener('emergency_alert', (e) => {
+          stopSsePollingFallback();
           const alertData = JSON.parse(e.data);
           showEmergencyBanner(alertData);
         });
 
         // 6. Doctor Schedule Update Event
         sseConnection.addEventListener('doctor_schedule_updated', (e) => {
+          stopSsePollingFallback();
           const update = JSON.parse(e.data);
           console.log('⚡ Doctor schedule updated via SSE:', update);
           fetchStats();
@@ -2262,13 +2294,13 @@
 
         // 7. Post-Call Doctor Summary Created Event
         sseConnection.addEventListener('call_summary_created', (e) => {
+          stopSsePollingFallback();
           console.log('⚡ Call summary created via SSE');
           fetchCallSummaries();
         });
 
         sseConnection.onerror = (err) => {
-          document.getElementById('sseStatusText').textContent = 'Reconnecting...';
-          document.querySelector('#sseStatus .status-dot').style.background = 'var(--danger)';
+          startSsePollingFallback();
         };
       }
 

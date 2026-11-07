@@ -44,8 +44,25 @@ export class PostgresDatabaseClient implements IDatabaseClient {
       if (schemaPath) {
         const sql = fs.readFileSync(schemaPath, 'utf8');
         await this.pool.query(sql);
-        rootLogger.info('Postgres schema verified and initialized successfully on Neon');
       }
+
+      // Phase 8: Outbox retry, max_retries, and dead-letter queue columns
+      await this.pool.query(`
+        ALTER TABLE outbox ADD COLUMN IF NOT EXISTS retry_count INT NOT NULL DEFAULT 0;
+        ALTER TABLE outbox ADD COLUMN IF NOT EXISTS max_retries INT NOT NULL DEFAULT 3;
+        ALTER TABLE outbox ADD COLUMN IF NOT EXISTS last_error TEXT;
+      `);
+      await this.pool
+        .query(
+          `DO $$ BEGIN
+             ALTER TABLE outbox DROP CONSTRAINT IF EXISTS outbox_status_check;
+             ALTER TABLE outbox ADD CONSTRAINT outbox_status_check CHECK (status IN ('PENDING', 'PROCESSED', 'FAILED', 'DEAD_LETTER'));
+           EXCEPTION WHEN OTHERS THEN NULL;
+           END $$;`
+        )
+        .catch(() => {});
+
+      rootLogger.info('Postgres schema verified and initialized successfully on Neon');
     } catch (err) {
       rootLogger.warn(
         'Could not auto-apply schema.sql on Postgres (tables might already exist):',
@@ -363,8 +380,8 @@ export class PostgresDatabaseClient implements IDatabaseClient {
     payload: Record<string, unknown>
   ): Promise<void> {
     await this.pool.query(
-      `INSERT INTO outbox (id, event_type, payload, status, created_at)
-       VALUES ($1, $2, $3, 'PENDING', NOW())`,
+      `INSERT INTO outbox (id, event_type, payload, status, retry_count, max_retries, created_at)
+       VALUES ($1, $2, $3, 'PENDING', 0, 3, NOW())`,
       [id, eventType, JSON.stringify(payload)]
     );
   }
@@ -374,7 +391,11 @@ export class PostgresDatabaseClient implements IDatabaseClient {
     try {
       await client.query('BEGIN');
       const res = await client.query(
-        `SELECT * FROM outbox WHERE status = 'PENDING' ORDER BY created_at ASC LIMIT 50 FOR UPDATE SKIP LOCKED`
+        `SELECT * FROM outbox 
+         WHERE status = 'PENDING' AND (retry_count IS NULL OR retry_count < max_retries)
+         ORDER BY created_at ASC 
+         LIMIT 50 
+         FOR UPDATE SKIP LOCKED`
       );
       if (res.rows.length > 0) {
         const ids = res.rows.map((r) => r.id);
@@ -389,6 +410,9 @@ export class PostgresDatabaseClient implements IDatabaseClient {
         eventType: r.event_type,
         payload: typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload,
         status: r.status,
+        retryCount: r.retry_count || 0,
+        maxRetries: r.max_retries || 3,
+        lastError: r.last_error,
         createdAt: r.created_at,
       }));
     } catch (err) {
@@ -397,6 +421,41 @@ export class PostgresDatabaseClient implements IDatabaseClient {
     } finally {
       client.release();
     }
+  }
+
+  public async markOutboxEventFailed(id: string, error: string): Promise<void> {
+    await this.pool.query(
+      `UPDATE outbox 
+       SET retry_count = retry_count + 1,
+           last_error = $2,
+           status = CASE WHEN retry_count + 1 >= max_retries THEN 'DEAD_LETTER' ELSE 'PENDING' END
+       WHERE id = $1`,
+      [id, error]
+    );
+  }
+
+  public async getDeadLetterOutboxEvents(): Promise<any[]> {
+    const res = await this.pool.query(
+      `SELECT * FROM outbox WHERE status = 'DEAD_LETTER' ORDER BY created_at DESC LIMIT 50`
+    );
+    return res.rows.map((r) => ({
+      id: r.id,
+      eventType: r.event_type,
+      payload: typeof r.payload === 'string' ? JSON.parse(r.payload) : r.payload,
+      status: r.status,
+      retryCount: r.retry_count,
+      maxRetries: r.max_retries,
+      lastError: r.last_error,
+      createdAt: r.created_at,
+    }));
+  }
+
+  public async deleteTranscriptsOlderThan(days: number): Promise<number> {
+    const res = await this.pool.query(
+      `DELETE FROM calls WHERE started_at < NOW() - ($1 || ' days')::INTERVAL RETURNING id`,
+      [days]
+    );
+    return res.rowCount || 0;
   }
 
   public async cancelAppointment(

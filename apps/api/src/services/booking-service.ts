@@ -426,9 +426,10 @@ export class BookingCoreService {
   public async releaseHold(holdToken: string): Promise<boolean> {
     const client = await this.pool.connect();
     try {
-      await client.query(`UPDATE slot_holds SET status = 'RELEASED' WHERE hold_token = $1`, [
-        holdToken,
-      ]);
+      await client.query(
+        `UPDATE slot_holds SET status = 'RELEASED' WHERE hold_token = $1`,
+        [holdToken]
+      );
       return true;
     } catch (err) {
       rootLogger.warn('Error releasing hold in database', { holdToken, error: err });
@@ -437,6 +438,8 @@ export class BookingCoreService {
       client.release();
     }
   }
+
+
 
   /**
    * 3. bookAppointment

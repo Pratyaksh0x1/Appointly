@@ -25,6 +25,7 @@ import {
 import { getProviders } from '../adapters/index.js';
 import { rootLogger, maskPhone } from '../logger/logger.js';
 import { globalCostMeter } from '../cost/cost-meter.js';
+import { getDatabaseClient } from '../db/index.js';
 import { broadcastDashboardEvent } from '../index.js';
 
 const MAX_CALL_DURATION_MS = 5 * 60 * 1000; // 5 minutes max call limit
@@ -51,10 +52,12 @@ export class RealtimeVoiceSession {
   private callTimer: NodeJS.Timeout | null = null;
   private idleTimer: NodeJS.Timeout | null = null;
   private isClosed: boolean = false;
+  private patientPhone: string;
 
   constructor(ws: WebSocket, callId: string, patientPhone: string = '9876543210') {
     this.ws = ws;
     this.callId = callId;
+    this.patientPhone = patientPhone;
     this.vad = new VoiceActivityDetector();
     this.metricsTracker = new TurnMetricsTracker(callId);
     this.conversationSession = createSession(patientPhone, callId);
@@ -319,12 +322,41 @@ export class RealtimeVoiceSession {
         });
         setTimeout(() => this.teardown('CALL_COMPLETED_SUCCESS'), 3000);
       }
-    } catch (err) {
+    } catch (err: any) {
       rootLogger.error(`[VoiceSession] Turn error in ${this.callId}:`, err);
+
+      // Phase 8: Graceful Degradation Protocol
+      // 1. Send / play pre-cached Hinglish apology audio with 0ms latency (works even if TTS failed!)
+      const cachedFallback = getCachedAudio('FALLBACK');
+      if (cachedFallback) {
+        this.sendAudioChunk(cachedFallback.audioBuffer, 0, true);
+      }
+
+      // 2. Transmit error and graceful fallback event to client
       this.sendEvent({
         type: 'error',
-        message: 'Maaf kijiye, system mein takneeki dikkat aayi hai.',
+        code: 'GRACEFUL_DEGRADATION_TRIGGERED',
+        message: FIXED_PHRASES.FALLBACK,
       });
+
+      // 3. Persist receptionist callback request so patient is never stranded
+      try {
+        const db = getDatabaseClient();
+        await db.saveCallbackRequest(
+          this.callId,
+          this.patientPhone,
+          `Graceful degradation triggered due to provider/system error: ${err?.message || err}`,
+          this.conversationSession.selectedSlot
+        );
+      } catch (cbErr) {
+        rootLogger.warn(
+          `[VoiceSession] Failed to persist fallback callback request in ${this.callId}:`,
+          cbErr
+        );
+      }
+
+      // 4. Cleanly tear down call after apology audio delivers
+      setTimeout(() => this.teardown('GRACEFUL_DEGRADATION_EXIT'), 3500);
     } finally {
       this.isProcessingTurn = false;
       this.abortController = null;

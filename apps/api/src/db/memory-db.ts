@@ -329,16 +329,46 @@ export class MemoryDatabaseClient implements IDatabaseClient {
       eventType,
       payload,
       status: 'PENDING',
+      retryCount: 0,
+      maxRetries: 3,
+      lastError: undefined,
       createdAt: new Date(),
     });
   }
 
   public async drainPendingOutbox(): Promise<any[]> {
-    const pending = this.outboxEvents.filter((e) => e.status === 'PENDING');
+    const pending = this.outboxEvents.filter(
+      (e) => e.status === 'PENDING' && (e.retryCount || 0) < (e.maxRetries || 3)
+    );
     for (const p of pending) {
       p.status = 'PROCESSED';
+      p.processedAt = new Date();
     }
     return pending;
+  }
+
+  public async markOutboxEventFailed(id: string, error: string): Promise<void> {
+    const evt = this.outboxEvents.find((e) => e.id === id);
+    if (evt) {
+      evt.retryCount = (evt.retryCount || 0) + 1;
+      evt.lastError = error;
+      if (evt.retryCount >= (evt.maxRetries || 3)) {
+        evt.status = 'DEAD_LETTER';
+      } else {
+        evt.status = 'PENDING';
+      }
+    }
+  }
+
+  public async getDeadLetterOutboxEvents(): Promise<any[]> {
+    return this.outboxEvents.filter((e) => e.status === 'DEAD_LETTER');
+  }
+
+  public async deleteTranscriptsOlderThan(days: number): Promise<number> {
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const beforeCount = this.callSummaries.length;
+    this.callSummaries = this.callSummaries.filter((s) => s.createdAt >= cutoff);
+    return beforeCount - this.callSummaries.length;
   }
 
   public async cancelAppointment(

@@ -78,4 +78,9 @@ export interface IDatabaseClient {
 
   saveOutboxEvent?(id: string, eventType: string, payload: Record<string, unknown>): Promise<void>;
   drainPendingOutbox?(): Promise<any[]>;
+  markOutboxEventFailed?(id: string, error: string): Promise<void>;
+  getDeadLetterOutboxEvents?(): Promise<any[]>;
+
+  /** Phase 8: Data Protection & Transcript Retention */
+  deleteTranscriptsOlderThan?(days: number): Promise<number>;
 }

@@ -29,6 +29,14 @@ import {
 } from './auth/jwt-auth.js';
 import { emitOutboxEvent, startOutboxRelay, stopOutboxRelay } from './db/outbox-relay.js';
 import { startReminderJob, stopReminderJob } from './reminders/reminder-job.js';
+import { applySecurityHeaders } from './middleware/security-headers.js';
+import { globalRateLimiter } from './middleware/rate-limiter.js';
+import { handleIdempotencyPreRequest } from './middleware/idempotency.js';
+import { readAndSanitizeJsonBody } from './middleware/sanitizer.js';
+import {
+  startTranscriptRetentionWorker,
+  stopTranscriptRetentionWorker,
+} from './services/transcript-retention.js';
 
 let isShuttingDown = false;
 const sseClients = new Set<http.ServerResponse>();
@@ -156,17 +164,9 @@ export function createServer() {
   const ttsClient = new GnaniTTSClient();
 
   const server = http.createServer(async (req, res) => {
-    // CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader(
-      'Access-Control-Allow-Headers',
-      'Content-Type, Authorization, X-Request-ID, X-Call-ID'
-    );
-
-    if (req.method === 'OPTIONS') {
-      res.writeHead(204);
-      res.end();
+    // 1. Strict Security Headers & CORS Allowlist
+    const handledOptions = applySecurityHeaders(req, res);
+    if (handledOptions) {
       return;
     }
 
@@ -174,7 +174,7 @@ export function createServer() {
     const pathname = parsedUrl.pathname;
 
     try {
-      // 1. Liveness Probe (/healthz)
+      // 1. Liveness Probe (/healthz) - bypasses rate limiting for orchestrators
       if (req.method === 'GET' && pathname === '/healthz') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
@@ -187,7 +187,7 @@ export function createServer() {
         return;
       }
 
-      // 2. Readiness Probe (/readyz)
+      // 2. Readiness Probe (/readyz) - bypasses rate limiting for orchestrators
       if (req.method === 'GET' && pathname === '/readyz') {
         if (isShuttingDown) {
           res.writeHead(503, { 'Content-Type': 'application/json' });
@@ -211,6 +211,20 @@ export function createServer() {
           res.end(JSON.stringify({ status: 'not_ready', error: String(dbErr) }));
         }
         return;
+      }
+
+      // 3. Sliding Window Rate Limiting (per-IP and per-session)
+      const allowed = globalRateLimiter.checkRateLimit(req, res);
+      if (!allowed) {
+        return;
+      }
+
+      // 4. Idempotency Check on mutating methods (POST, PUT, DELETE, PATCH)
+      if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method || '')) {
+        const handledIdempotency = handleIdempotencyPreRequest(req, res);
+        if (handledIdempotency) {
+          return;
+        }
       }
 
       // 3. Detailed Health Check (/health)
@@ -241,44 +255,40 @@ export function createServer() {
 
       // 4-AUTH. Authentication Endpoints for Doctor Dashboard
       if (req.method === 'POST' && pathname === '/api/auth/google') {
-        let body = '';
-        req.on('data', (c) => (body += c));
-        req.on('end', async () => {
-          try {
-            const { credential } = JSON.parse(body || '{}');
-            const doctorUser = await verifyGoogleCredential(credential);
-            const token = signDoctorToken(doctorUser);
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true, token, doctor: doctorUser }));
-          } catch (err: any) {
-            res.writeHead(401, { 'Content-Type': 'application/json' });
-            res.end(
-              JSON.stringify({
-                error: 'GOOGLE_AUTH_FAILED',
-                message: String(err.message || err),
-              })
-            );
-          }
-        });
+        const bodyRes = await readAndSanitizeJsonBody(req, res);
+        if (!bodyRes.success) return;
+        try {
+          const { credential } = bodyRes.data || {};
+          const doctorUser = await verifyGoogleCredential(credential);
+          const token = signDoctorToken(doctorUser);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, token, doctor: doctorUser }));
+        } catch (err: any) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              error: 'GOOGLE_AUTH_FAILED',
+              message: String(err.message || err),
+            })
+          );
+        }
         return;
       }
 
       if (req.method === 'POST' && pathname === '/api/auth/dev-login') {
-        let body = '';
-        req.on('data', (c) => (body += c));
-        req.on('end', () => {
-          try {
-            const { doctorId } = JSON.parse(body || '{}');
-            const targetId = doctorId || 'dr_sharma';
-            const doctorUser = CLINIC_DOCTOR_ROSTER[targetId] || CLINIC_DOCTOR_ROSTER['dr_sharma'];
-            const token = signDoctorToken(doctorUser);
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true, token, doctor: doctorUser }));
-          } catch (err: any) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'DEV_LOGIN_FAILED', message: String(err) }));
-          }
-        });
+        const bodyRes = await readAndSanitizeJsonBody(req, res);
+        if (!bodyRes.success) return;
+        try {
+          const { doctorId } = bodyRes.data || {};
+          const targetId = doctorId || 'dr_sharma';
+          const doctorUser = CLINIC_DOCTOR_ROSTER[targetId] || CLINIC_DOCTOR_ROSTER['dr_sharma'];
+          const token = signDoctorToken(doctorUser);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, token, doctor: doctorUser }));
+        } catch (err: any) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'DEV_LOGIN_FAILED', message: String(err) }));
+        }
         return;
       }
 
@@ -303,53 +313,50 @@ export function createServer() {
         if (!authDoctor) return;
 
         const doctorId = scheduleMatch[1];
-        let body = '';
-        req.on('data', (chunk) => (body += chunk));
-        req.on('end', async () => {
-          try {
-            const raw = JSON.parse(body || '{}');
-            const parsed = doctorScheduleUpdateSchema.safeParse(raw);
-            if (!parsed.success) {
-              res.writeHead(400, { 'Content-Type': 'application/json' });
-              res.end(
-                JSON.stringify({
-                  error: 'INVALID_SCHEDULE_DATA',
-                  details: parsed.error.format(),
-                })
-              );
-              return;
-            }
-
-            const updatedDoc = await db.updateDoctorSchedule(doctorId, parsed.data);
-
-            // Broadcast real-time schedule update event to connected dashboards via outbox
-            await emitOutboxEvent('doctor_schedule_updated', {
-              doctorId,
-              doctor: updatedDoc,
-              timestamp: new Date().toISOString(),
-            });
-
-            rootLogger.info(`Doctor schedule updated for ${doctorId}`, {
-              doctorId,
-              workingHoursStart: updatedDoc.workingHoursStart,
-              workingHoursEnd: updatedDoc.workingHoursEnd,
-              activeDays: updatedDoc.activeDays,
-            });
-
-            res.writeHead(200, { 'Content-Type': 'application/json' });
+        const bodyRes = await readAndSanitizeJsonBody(req, res);
+        if (!bodyRes.success) return;
+        try {
+          const parsed = doctorScheduleUpdateSchema.safeParse(bodyRes.data);
+          if (!parsed.success) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(
               JSON.stringify({
-                success: true,
-                message: `Schedule for ${updatedDoc.name} updated to ${updatedDoc.workingHoursStart} - ${updatedDoc.workingHoursEnd}.`,
-                doctor: updatedDoc,
+                error: 'INVALID_SCHEDULE_DATA',
+                details: parsed.error.format(),
               })
             );
-          } catch (err) {
-            rootLogger.error('Error updating doctor schedule:', err);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: String(err) }));
+            return;
           }
-        });
+
+          const updatedDoc = await db.updateDoctorSchedule(doctorId, parsed.data);
+
+          // Broadcast real-time schedule update event to connected dashboards via outbox
+          await emitOutboxEvent('doctor_schedule_updated', {
+            doctorId,
+            doctor: updatedDoc,
+            timestamp: new Date().toISOString(),
+          });
+
+          rootLogger.info(`Doctor schedule updated for ${doctorId}`, {
+            doctorId,
+            workingHoursStart: updatedDoc.workingHoursStart,
+            workingHoursEnd: updatedDoc.workingHoursEnd,
+            activeDays: updatedDoc.activeDays,
+          });
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              success: true,
+              message: `Schedule for ${updatedDoc.name} updated to ${updatedDoc.workingHoursStart} - ${updatedDoc.workingHoursEnd}.`,
+              doctor: updatedDoc,
+            })
+          );
+        } catch (err) {
+          rootLogger.error('Error updating doctor schedule:', err);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
         return;
       }
 
@@ -383,37 +390,35 @@ export function createServer() {
         if (!authDoctor) return;
 
         const appointmentId = rescheduleMatch[1];
-        let body = '';
-        req.on('data', (c) => (body += c));
-        req.on('end', async () => {
-          try {
-            const { newDate, newStartTime } = JSON.parse(body || '{}');
-            if (!newDate || !newStartTime) {
-              res.writeHead(400, { 'Content-Type': 'application/json' });
-              res.end(
-                JSON.stringify({
-                  error: 'MISSING_DATA',
-                  message: 'newDate and newStartTime are required.',
-                })
-              );
-              return;
-            }
-
-            const result = await db.rescheduleAppointment(appointmentId, newDate, newStartTime);
-            if (result.success && result.appointment) {
-              await emitOutboxEvent('appointment_rescheduled', result.appointment as any);
-              res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify(result));
-            } else {
-              res.writeHead(400, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify(result));
-            }
-          } catch (err: any) {
-            rootLogger.error('Error rescheduling appointment:', err);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: String(err) }));
+        const bodyRes = await readAndSanitizeJsonBody(req, res);
+        if (!bodyRes.success) return;
+        try {
+          const { newDate, newStartTime } = bodyRes.data || {};
+          if (!newDate || !newStartTime) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(
+              JSON.stringify({
+                error: 'MISSING_DATA',
+                message: 'newDate and newStartTime are required.',
+              })
+            );
+            return;
           }
-        });
+
+          const result = await db.rescheduleAppointment(appointmentId, newDate, newStartTime);
+          if (result.success && result.appointment) {
+            await emitOutboxEvent('appointment_rescheduled', result.appointment as any);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result));
+          } else {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(result));
+          }
+        } catch (err: any) {
+          rootLogger.error('Error rescheduling appointment:', err);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
         return;
       }
 
@@ -424,23 +429,21 @@ export function createServer() {
         if (!authDoctor) return;
 
         const appointmentId = cancelMatch[1];
-        let body = '';
-        req.on('data', (c) => (body += c));
-        req.on('end', async () => {
-          try {
-            const { reason } = JSON.parse(body || '{}');
-            const result = await db.cancelAppointment(appointmentId, reason);
-            if (result.success) {
-              await emitOutboxEvent('appointment_cancelled', { appointmentId, reason });
-            }
-            res.writeHead(result.success ? 200 : 400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify(result));
-          } catch (err: any) {
-            rootLogger.error('Error cancelling appointment:', err);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: String(err) }));
+        const bodyRes = await readAndSanitizeJsonBody(req, res);
+        if (!bodyRes.success) return;
+        try {
+          const { reason } = bodyRes.data || {};
+          const result = await db.cancelAppointment(appointmentId, reason);
+          if (result.success) {
+            await emitOutboxEvent('appointment_cancelled', { appointmentId, reason });
           }
-        });
+          res.writeHead(result.success ? 200 : 400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(result));
+        } catch (err: any) {
+          rootLogger.error('Error cancelling appointment:', err);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
         return;
       }
 
@@ -520,36 +523,34 @@ export function createServer() {
 
       // 8b. Realtime Voice Session Token Generator (Rate-limited, short-lived token)
       if (req.method === 'POST' && pathname === '/api/voice/session') {
-        let body = '';
-        req.on('data', (chunk) => (body += chunk));
-        req.on('end', () => {
-          try {
-            const parsed = body ? JSON.parse(body) : {};
-            const clientIp =
-              (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
-              req.socket.remoteAddress ||
-              '127.0.0.1';
-            const tokenResult = createVoiceSessionToken(clientIp, {
-              patientPhone: parsed.patientPhone,
-              doctorId: parsed.doctorId,
-            });
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify(tokenResult));
-          } catch (err: any) {
-            if (err.message && err.message.includes('TOO_MANY_REQUESTS')) {
-              res.writeHead(429, { 'Content-Type': 'application/json' });
-              res.end(
-                JSON.stringify({
-                  error: 'RATE_LIMIT_EXCEEDED',
-                  message: 'Too many requests. Please wait before creating a new session.',
-                })
-              );
-            } else {
-              res.writeHead(500, { 'Content-Type': 'application/json' });
-              res.end(JSON.stringify({ error: String(err) }));
-            }
+        const bodyRes = await readAndSanitizeJsonBody(req, res);
+        if (!bodyRes.success) return;
+        try {
+          const parsed = bodyRes.data || {};
+          const clientIp =
+            (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+            req.socket.remoteAddress ||
+            '127.0.0.1';
+          const tokenResult = createVoiceSessionToken(clientIp, {
+            patientPhone: parsed.patientPhone,
+            doctorId: parsed.doctorId,
+          });
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(tokenResult));
+        } catch (err: any) {
+          if (err.message && err.message.includes('TOO_MANY_REQUESTS')) {
+            res.writeHead(429, { 'Content-Type': 'application/json' });
+            res.end(
+              JSON.stringify({
+                error: 'RATE_LIMIT_EXCEEDED',
+                message: 'Too many requests. Please wait before creating a new session.',
+              })
+            );
+          } else {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: String(err) }));
           }
-        });
+        }
         return;
       }
 
@@ -598,140 +599,138 @@ export function createServer() {
 
       // 10. Conversational Chat & Appointment Booking API
       if (req.method === 'POST' && pathname === '/api/chat') {
-        let body = '';
-        req.on('data', (chunk) => (body += chunk));
-        req.on('end', async () => {
-          try {
-            const data = JSON.parse(body || '{}');
-            const userText = data.text || '';
-            const callId = data.callId || `call_${Date.now()}`;
-            const patientPhone = data.phone || '9876543210';
+        const bodyRes = await readAndSanitizeJsonBody(req, res);
+        if (!bodyRes.success) return;
+        try {
+          const data = bodyRes.data || {};
+          const userText = data.text || '';
+          const callId = data.callId || `call_${Date.now()}`;
+          const patientPhone = data.phone || '9876543210';
 
-            // NON-NEGOTIABLE RULE 4: Code-level deterministic emergency check
-            const emergency = checkEmergency(userText);
-            if (emergency.isEmergency) {
-              await emitOutboxEvent('emergency_alert', {
-                callId,
-                patientPhoneMasked: patientPhone,
-                matchedKeywords: emergency.matchedKeywords,
-                timestamp: new Date().toISOString(),
-              });
-
-              res.writeHead(200, { 'Content-Type': 'application/json' });
-              res.end(
-                JSON.stringify({
-                  replyText: emergency.escalationMessage,
-                  isEmergency: true,
-                  matchedKeywords: emergency.matchedKeywords,
-                })
-              );
-              return;
-            }
-
-            // LLM Reasoning & Tool Calling
-            const clinicDoctors = await db.getDoctors();
-            const doctorScheduleDesc = clinicDoctors
-              .map(
-                (d) =>
-                  `- ${d.name} (${d.specialty}): OPD Timing ${d.workingHoursStart} se ${d.workingHoursEnd} on ${d.activeDays.join(', ')} (Fee: ₹${d.fee})`
-              )
-              .join('\n');
-
-            const messages: ChatMessage[] = [
-              {
-                role: 'system',
-                content:
-                  'You are Appointly, an empathetic, highly professional clinic voice assistant for Arogya Care Clinic. ' +
-                  'You speak in natural Hinglish (Hindi + English code-switching). ' +
-                  'Your mission is to help patients book doctor appointments, check timings, fees, and doctor availability.\n\n' +
-                  'CURRENT CLINIC DOCTORS & OPD TIMINGS:\n' +
-                  doctorScheduleDesc +
-                  '\n\n' +
-                  'CRITICAL DOCTOR TIMING RULES:\n' +
-                  '1. Each doctor configures their specific consultation hours (e.g. Dr. Sharma may sit 17:00 to 22:00 / 5 PM to 10 PM).\n' +
-                  "2. NEVER offer or book a slot outside the doctor's active working hours.\n" +
-                  "3. If a patient asks for an unavailable time (e.g. asking for 10:00 AM when doctor works 17:00 to 22:00), politely explain the doctor's active timing in Hinglish and suggest available evening slots.\n" +
-                  '4. RULE 1: You CANNOT write directly to the database. You MUST call tools (get_clinic_doctors, get_available_slots, book_appointment).\n' +
-                  '5. RULE 2: When an appointment is booked, tell the patient clearly: doctor name, date, start time, and duration (in minutes). Only say "booked" after the DB tool confirms with success.\n' +
-                  'Use natural conversational speech tags like <pauses> when appropriate.',
-              },
-              { role: 'user', content: userText },
-            ];
-
-            const llmRes = await llmClient.generateResponse(messages, APPOINTMENT_TOOLS, callId, {
-              patientPhone,
+          // NON-NEGOTIABLE RULE 4: Code-level deterministic emergency check
+          const emergency = checkEmergency(userText);
+          if (emergency.isEmergency) {
+            await emitOutboxEvent('emergency_alert', {
+              callId,
+              patientPhoneMasked: patientPhone,
+              matchedKeywords: emergency.matchedKeywords,
+              timestamp: new Date().toISOString(),
             });
-
-            let finalReply = llmRes.message.content || '';
-
-            if (llmRes.message.tool_calls && llmRes.message.tool_calls.length > 0) {
-              for (const tc of llmRes.message.tool_calls) {
-                const args = JSON.parse(tc.function.arguments);
-                const toolExecution = await handleToolExecution(tc.function.name, args, callId);
-
-                if (tc.function.name === 'book_appointment') {
-                  const bookingRes = toolExecution.result as {
-                    success: boolean;
-                    appointment?: {
-                      doctorName: string;
-                      appointmentDate: string;
-                      startTime: string;
-                      durationMinutes: number;
-                    };
-                    message: string;
-                    error?: string;
-                  };
-
-                  if (bookingRes.success && bookingRes.appointment) {
-                    finalReply =
-                      `Aapka appointment confirm ho gaya hai! <pauses> ` +
-                      `Doctor: ${bookingRes.appointment.doctorName}, ` +
-                      `Date: ${bookingRes.appointment.appointmentDate}, ` +
-                      `Samay: ${bookingRes.appointment.startTime}, ` +
-                      `Duration: ${bookingRes.appointment.durationMinutes} minutes. ` +
-                      `Aapko confirmation message bhej diya gaya hai.`;
-                  } else {
-                    finalReply = `Maaf kijiye, ${bookingRes.message}`;
-                  }
-                } else if (tc.function.name === 'get_clinic_doctors') {
-                  const docs = (toolExecution.result as any[]) || clinicDoctors;
-                  const docOverview = docs
-                    .map(
-                      (d) =>
-                        `${d.name} (${d.specialty}, Timing: ${d.workingHoursStart} - ${d.workingHoursEnd}, Fee: ₹${d.fee})`
-                    )
-                    .join('; ');
-                  finalReply = `Hamare clinic me ye doctors uplabdh hain: ${docOverview}. Aap kinke sath appointment lena chahenge?`;
-                } else if (tc.function.name === 'get_available_slots') {
-                  const slotRes = toolExecution.result as {
-                    doctorId: string;
-                    date: string;
-                    availableSlots: string[];
-                  };
-                  if (slotRes.availableSlots && slotRes.availableSlots.length > 0) {
-                    const sample = slotRes.availableSlots.slice(0, 6).join(', ');
-                    finalReply = `${slotRes.date} ke liye ye time slots uplabdh hain: ${sample}. Aapko kaunsa time theek rahega?`;
-                  } else {
-                    finalReply = `Maaf kijiye, is date (${slotRes.date}) par koi slot uplabdh nahi hai. Kripya doctor ke clinic timing me kisi aur din ya samay ka slot chuniye.`;
-                  }
-                }
-              }
-            }
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(
               JSON.stringify({
-                replyText: finalReply,
-                callId,
-                creditsSummary: globalCostMeter.getSummary(),
+                replyText: emergency.escalationMessage,
+                isEmergency: true,
+                matchedKeywords: emergency.matchedKeywords,
               })
             );
-          } catch (chatErr) {
-            rootLogger.error('Error in /api/chat:', chatErr);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: String(chatErr) }));
+            return;
           }
-        });
+
+          // LLM Reasoning & Tool Calling
+          const clinicDoctors = await db.getDoctors();
+          const doctorScheduleDesc = clinicDoctors
+            .map(
+              (d) =>
+                `- ${d.name} (${d.specialty}): OPD Timing ${d.workingHoursStart} se ${d.workingHoursEnd} on ${d.activeDays.join(', ')} (Fee: ₹${d.fee})`
+            )
+            .join('\n');
+
+          const messages: ChatMessage[] = [
+            {
+              role: 'system',
+              content:
+                'You are Appointly, an empathetic, highly professional clinic voice assistant for Arogya Care Clinic. ' +
+                'You speak in natural Hinglish (Hindi + English code-switching). ' +
+                'Your mission is to help patients book doctor appointments, check timings, fees, and doctor availability.\n\n' +
+                'CURRENT CLINIC DOCTORS & OPD TIMINGS:\n' +
+                doctorScheduleDesc +
+                '\n\n' +
+                'CRITICAL DOCTOR TIMING RULES:\n' +
+                '1. Each doctor configures their specific consultation hours (e.g. Dr. Sharma may sit 17:00 to 22:00 / 5 PM to 10 PM).\n' +
+                "2. NEVER offer or book a slot outside the doctor's active working hours.\n" +
+                "3. If a patient asks for an unavailable time (e.g. asking for 10:00 AM when doctor works 17:00 to 22:00), politely explain the doctor's active timing in Hinglish and suggest available evening slots.\n" +
+                '4. RULE 1: You CANNOT write directly to the database. You MUST call tools (get_clinic_doctors, get_available_slots, book_appointment).\n' +
+                '5. RULE 2: When an appointment is booked, tell the patient clearly: doctor name, date, start time, and duration (in minutes). Only say "booked" after the DB tool confirms with success.\n' +
+                'Use natural conversational speech tags like <pauses> when appropriate.',
+            },
+            { role: 'user', content: userText },
+          ];
+
+          const llmRes = await llmClient.generateResponse(messages, APPOINTMENT_TOOLS, callId, {
+            patientPhone,
+          });
+
+          let finalReply = llmRes.message.content || '';
+
+          if (llmRes.message.tool_calls && llmRes.message.tool_calls.length > 0) {
+            for (const tc of llmRes.message.tool_calls) {
+              const args = JSON.parse(tc.function.arguments);
+              const toolExecution = await handleToolExecution(tc.function.name, args, callId);
+
+              if (tc.function.name === 'book_appointment') {
+                const bookingRes = toolExecution.result as {
+                  success: boolean;
+                  appointment?: {
+                    doctorName: string;
+                    appointmentDate: string;
+                    startTime: string;
+                    durationMinutes: number;
+                  };
+                  message: string;
+                  error?: string;
+                };
+
+                if (bookingRes.success && bookingRes.appointment) {
+                  finalReply =
+                    `Aapka appointment confirm ho gaya hai! <pauses> ` +
+                    `Doctor: ${bookingRes.appointment.doctorName}, ` +
+                    `Date: ${bookingRes.appointment.appointmentDate}, ` +
+                    `Samay: ${bookingRes.appointment.startTime}, ` +
+                    `Duration: ${bookingRes.appointment.durationMinutes} minutes. ` +
+                    `Aapko confirmation message bhej diya gaya hai.`;
+                } else {
+                  finalReply = `Maaf kijiye, ${bookingRes.message}`;
+                }
+              } else if (tc.function.name === 'get_clinic_doctors') {
+                const docs = (toolExecution.result as any[]) || clinicDoctors;
+                const docOverview = docs
+                  .map(
+                    (d) =>
+                      `${d.name} (${d.specialty}, Timing: ${d.workingHoursStart} - ${d.workingHoursEnd}, Fee: ₹${d.fee})`
+                  )
+                  .join('; ');
+                finalReply = `Hamare clinic me ye doctors uplabdh hain: ${docOverview}. Aap kinke sath appointment lena chahenge?`;
+              } else if (tc.function.name === 'get_available_slots') {
+                const slotRes = toolExecution.result as {
+                  doctorId: string;
+                  date: string;
+                  availableSlots: string[];
+                };
+                if (slotRes.availableSlots && slotRes.availableSlots.length > 0) {
+                  const sample = slotRes.availableSlots.slice(0, 6).join(', ');
+                  finalReply = `${slotRes.date} ke liye ye time slots uplabdh hain: ${sample}. Aapko kaunsa time theek rahega?`;
+                } else {
+                  finalReply = `Maaf kijiye, is date (${slotRes.date}) par koi slot uplabdh nahi hai. Kripya doctor ke clinic timing me kisi aur din ya samay ka slot chuniye.`;
+                }
+              }
+            }
+          }
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              replyText: finalReply,
+              callId,
+              creditsSummary: globalCostMeter.getSummary(),
+            })
+          );
+        } catch (chatErr) {
+          rootLogger.error('Error in /api/chat:', chatErr);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(chatErr) }));
+        }
         return;
       }
 
@@ -798,6 +797,7 @@ export async function startApp() {
   await initAudioCache();
   startOutboxRelay(1000);
   startReminderJob(5000);
+  startTranscriptRetentionWorker();
   const doctors = await db.getDoctors();
   rootLogger.info(`Connected to database. Loaded ${doctors.length} clinic doctors.`, {
     doctorsCount: doctors.length,
@@ -811,6 +811,7 @@ export async function startApp() {
     isShuttingDown = true;
     stopOutboxRelay();
     stopReminderJob();
+    stopTranscriptRetentionWorker();
     rootLogger.info(`Received ${signal}. Initiating graceful shutdown...`);
 
     // Notify connected SSE clients

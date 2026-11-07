@@ -92,12 +92,15 @@ CREATE TABLE IF NOT EXISTS calls (
     ended_at TIMESTAMPTZ
 );
 
--- 7. Outbox (Transactional Outbox Pattern)
+-- 7. Outbox (Transactional Outbox Pattern with Retry & Dead-Letter Queue)
 CREATE TABLE IF NOT EXISTS outbox (
     id VARCHAR(64) PRIMARY KEY,
     event_type VARCHAR(64) NOT NULL,
     payload JSONB NOT NULL,
-    status VARCHAR(32) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'PROCESSED', 'FAILED')),
+    status VARCHAR(32) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'PROCESSED', 'FAILED', 'DEAD_LETTER')),
+    retry_count INT NOT NULL DEFAULT 0,
+    max_retries INT NOT NULL DEFAULT 3,
+    last_error TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     processed_at TIMESTAMPTZ
 );

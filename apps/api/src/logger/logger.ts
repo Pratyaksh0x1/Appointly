@@ -25,6 +25,11 @@ export const REDACTION_KEYS = [
   'credential',
   'access_token',
   'private_key',
+  'session_token',
+  'cookie',
+  'jwt',
+  'email',
+  'aadhaar',
 ];
 
 export function maskPhone(phone: string): string {
@@ -46,11 +51,32 @@ export function maskName(name: string): string {
     .join(' ');
 }
 
+export function maskEmail(email: string): string {
+  if (!email || !email.includes('@')) return '[EMAIL_REDACTED]';
+  const [user, domain] = email.split('@');
+  const maskedUser = user.length > 2 ? `${user[0]}***${user.slice(-1)}` : `${user[0]}***`;
+  return `${maskedUser}@${domain}`;
+}
+
+export function redactPiiFromTranscript(text: string): string {
+  if (!text || typeof text !== 'string') return '';
+  return (
+    text
+      // Redact 10-digit Indian phone numbers
+      .replace(/(?:\+91[\s-]?)?[6-9]\d{9}\b/g, (match) => maskPhone(match))
+      // Redact email addresses
+      .replace(/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/g, (match) => maskEmail(match))
+      // Redact Bearer tokens / JWTs
+      .replace(/Bearer\s+[A-Za-z0-9-_.]+/gi, 'Bearer [REDACTED]')
+      // Redact 12-digit Aadhaar / ID formats
+      .replace(/\b\d{4}\s?\d{4}\s?\d{4}\b/g, '****-****-****')
+  );
+}
+
 export function sanitizeData(data: unknown): unknown {
   if (data === null || data === undefined) return data;
   if (typeof data === 'string') {
-    // Redact raw phone patterns inside freeform strings
-    return data.replace(/(?:\+91[\s-]?)?[6-9]\d{9}\b/g, (match) => maskPhone(match));
+    return redactPiiFromTranscript(data);
   }
   if (typeof data !== 'object') return data;
   if (Array.isArray(data)) return data.map(sanitizeData);
@@ -60,6 +86,8 @@ export function sanitizeData(data: unknown): unknown {
     const lowerKey = key.toLowerCase();
     if (REDACTION_KEYS.some((redacted) => lowerKey.includes(redacted))) {
       cleanObj[key] = '[REDACTED]';
+    } else if (/email/i.test(key) && typeof val === 'string') {
+      cleanObj[key] = maskEmail(val);
     } else if (/phone/i.test(key) && typeof val === 'string') {
       cleanObj[key] = maskPhone(val);
     } else if (/patientname|patient_name|username/i.test(key) && typeof val === 'string') {
