@@ -94,6 +94,10 @@ export const envSchema = z.object({
     .default('1.0')
     .transform((val) => parseFloat(val)),
 
+  // Google & Gemini AI
+  GOOGLE_CLIENT_ID: z.string().default(''),
+  GEMINI_API_KEY: z.string().default(''),
+
   // Evon 30B LLM / Indic Foundational Model (Gnani STT & TTS use GNANI_API_KEY; Evon runs locally or via built-in clinical engine)
   EVON_API_KEY: z.string().default(''),
   EVON_BASE_URL: z.string().url().default('http://localhost:11434/v1'),

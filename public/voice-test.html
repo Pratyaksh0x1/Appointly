@@ -3,20 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Appointly — Live Voice Agent Tester & Latency Monitor</title>
+    <title>Appointly — Live Clinic Voice Call</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
     <style>
       :root {
-        --bg: #090812;
-        --card-bg: #131126;
-        --card-border: #232042;
+        --bg-gradient: radial-gradient(circle at 50% 20%, #1e1b4b 0%, #0f172a 100%);
+        --phone-bg: #0b0f19;
+        --phone-border: #1e293b;
         --accent: #8b5cf6;
-        --accent-hover: #7c3aed;
-        --text: #f3f4f6;
-        --text-muted: #9ca3af;
-        --green: #10b981;
-        --yellow: #f59e0b;
-        --red: #ef4444;
-        --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        --accent-glow: rgba(139, 92, 246, 0.4);
+        --success: #10b981;
+        --danger: #ef4444;
+        --text: #f8fafc;
+        --text-muted: #94a3b8;
+        --glass-bg: rgba(255, 255, 255, 0.04);
+        --glass-border: rgba(255, 255, 255, 0.08);
       }
 
       * {
@@ -24,1021 +30,854 @@
         margin: 0;
         padding: 0;
       }
+
       body {
-        background: var(--bg);
+        font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+        background: var(--bg-gradient);
         color: var(--text);
-        font-family:
-          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         min-height: 100vh;
         display: flex;
         flex-direction: column;
         align-items: center;
-        padding: 24px 16px;
+        justify-content: center;
+        padding: 20px;
       }
 
-      header {
+      .top-nav {
         width: 100%;
-        max-width: 960px;
+        max-width: 440px;
         display: flex;
-        align-items: center;
         justify-content: space-between;
-        margin-bottom: 20px;
-        padding-bottom: 16px;
-        border-bottom: 1px solid var(--card-border);
-      }
-
-      .brand {
-        display: flex;
         align-items: center;
-        gap: 12px;
+        margin-bottom: 14px;
       }
 
-      .logo-img {
-        width: 44px;
-        height: 44px;
-        border-radius: 50%;
-        border: 2px solid var(--accent);
-        object-fit: cover;
-      }
-
-      h1 {
-        font-size: 1.4rem;
-        font-weight: 700;
-        color: #fff;
-      }
-
-      .sub-brand {
-        font-size: 0.85rem;
+      .btn-nav {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
         color: var(--text-muted);
-      }
-
-      .badge-state {
-        padding: 6px 14px;
+        padding: 6px 12px;
         border-radius: 9999px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        background: #1e1b4b;
-        color: #c4b5fd;
-        border: 1px solid #4338ca;
-      }
-
-      .container {
-        width: 100%;
-        max-width: 960px;
-        display: grid;
-        grid-template-columns: 1fr 340px;
-        gap: 20px;
-      }
-
-      @media (max-width: 768px) {
-        .container {
-          grid-template-columns: 1fr;
-        }
-      }
-
-      .chat-panel {
-        background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        border-radius: 16px;
-        display: flex;
-        flex-direction: column;
-        height: 640px;
-        overflow: hidden;
-      }
-
-      .mode-bar {
-        padding: 10px 16px;
-        background: #100e21;
-        border-bottom: 1px solid var(--card-border);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        font-size: 0.78rem;
-      }
-
-      .mode-toggle-group {
-        display: flex;
-        gap: 4px;
-        background: #090814;
-        padding: 3px;
-        border-radius: 8px;
-        border: 1px solid var(--card-border);
-      }
-
-      .mode-toggle-btn {
-        background: transparent;
-        border: none;
-        color: var(--text-muted);
-        font-size: 0.72rem;
-        font-weight: 600;
-        padding: 4px 10px;
-        border-radius: 6px;
-        cursor: pointer;
-        transition: all 0.15s ease;
-      }
-
-      .mode-toggle-btn.active {
-        background: var(--accent);
-        color: #ffffff;
-      }
-
-      .messages-container {
-        flex: 1;
-        overflow-y: auto;
-        padding: 18px;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-      }
-
-      .bubble {
-        max-width: 82%;
-        padding: 12px 16px;
-        border-radius: 14px;
-        font-size: 0.92rem;
-        line-height: 1.45;
-        animation: fadeIn 0.2s ease-in-out;
-      }
-
-      @keyframes fadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(6px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-
-      .bubble-agent {
-        align-self: flex-start;
-        background: #1f1b3d;
-        border: 1px solid #3b326d;
-        color: #f3f4f6;
-        border-bottom-left-radius: 4px;
-      }
-
-      .bubble-user {
-        align-self: flex-end;
-        background: var(--accent);
-        color: #fff;
-        border-bottom-right-radius: 4px;
-      }
-
-      .bubble-filler {
-        align-self: flex-start;
-        background: rgba(245, 158, 11, 0.15);
-        border: 1px solid rgba(245, 158, 11, 0.4);
-        color: #fcd34d;
-        font-style: italic;
-        font-size: 0.85rem;
-      }
-
-      .bubble-emergency {
-        align-self: flex-start;
-        background: rgba(239, 68, 68, 0.2);
-        border: 1px solid var(--red);
-        color: #fca5a5;
-        font-weight: 600;
-      }
-
-      /* Quick Scenario Chips */
-      .chips-bar {
-        padding: 8px 14px;
-        background: #0d0b1c;
-        border-top: 1px solid var(--card-border);
-        display: flex;
-        gap: 6px;
-        overflow-x: auto;
-        scrollbar-width: thin;
-      }
-
-      .chips-bar::-webkit-scrollbar {
-        height: 4px;
-      }
-      .chips-bar::-webkit-scrollbar-thumb {
-        background: #2e265c;
-        border-radius: 4px;
-      }
-
-      .chip-btn {
-        background: #1b1738;
-        border: 1px solid #352e69;
-        color: #c4b5fd;
-        font-size: 0.72rem;
-        padding: 5px 11px;
-        border-radius: 16px;
-        cursor: pointer;
-        white-space: nowrap;
-        transition: all 0.15s ease;
-        flex-shrink: 0;
-      }
-
-      .chip-btn:hover {
-        background: #2b2361;
-        border-color: #8b5cf6;
-        color: #ffffff;
-      }
-
-      /* Manual Text Input Bar */
-      .manual-input-bar {
-        padding: 10px 14px;
-        background: #0f0d20;
-        border-top: 1px solid var(--card-border);
-        display: flex;
-        gap: 8px;
-        align-items: center;
-      }
-
-      .manual-text-input {
-        flex: 1;
-        background: #16132d;
-        border: 1px solid #3b326d;
-        border-radius: 10px;
-        padding: 10px 14px;
-        color: #f3f4f6;
-        font-size: 0.88rem;
-        outline: none;
-        transition: border-color 0.15s ease;
-      }
-
-      .manual-text-input:focus {
-        border-color: #8b5cf6;
-        box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.25);
-      }
-
-      .btn-send {
-        background: #6366f1;
-        border: none;
-        color: #fff;
-        padding: 0 16px;
-        height: 40px;
-        border-radius: 10px;
-        font-weight: 600;
-        font-size: 0.82rem;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        transition: background 0.15s ease;
-        white-space: nowrap;
-      }
-
-      .btn-send:hover {
-        background: #4f46e5;
-      }
-
-      .btn-browser-voice {
-        background: #1e1b4b;
-        border: 1px solid #6366f1;
-        color: #c7d2fe;
-        padding: 0 13px;
-        height: 40px;
-        border-radius: 10px;
-        font-weight: 600;
         font-size: 0.8rem;
-        cursor: pointer;
+        text-decoration: none;
         display: flex;
         align-items: center;
         gap: 6px;
-        white-space: nowrap;
-        transition: all 0.15s ease;
+        transition: all 0.2s ease;
       }
 
-      .btn-browser-voice:hover {
-        background: #312e81;
-        color: #ffffff;
+      .btn-nav:hover {
+        color: #fff;
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.2);
       }
 
-      .btn-browser-voice.listening {
-        background: #dc2626;
-        border-color: #ef4444;
-        color: #ffffff;
-        animation: pulseRed 1.2s infinite;
-      }
-
-      @keyframes pulseRed {
-        0% {
-          box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6);
-        }
-        70% {
-          box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
-        }
-        100% {
-          box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
-        }
-      }
-
-      /* Call Control Bar */
-      .controls-bar {
-        padding: 12px 14px;
-        background: #0b0918;
-        border-top: 1px solid var(--card-border);
+      .ai-badge {
+        font-size: 0.72rem;
+        background: rgba(139, 92, 246, 0.2);
+        border: 1px solid rgba(139, 92, 246, 0.4);
+        color: #c4b5fd;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 6px;
       }
 
-      .btn-mic {
-        flex: 1;
-        height: 44px;
-        border-radius: 10px;
-        border: none;
-        background: var(--accent);
-        color: #fff;
-        font-size: 0.95rem;
-        font-weight: 600;
-        cursor: pointer;
+      .ai-pulse-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #10b981;
+        box-shadow: 0 0 8px #10b981;
+      }
+
+      /* Smartphone Frame */
+      .phone-frame {
+        width: 100%;
+        max-width: 420px;
+        height: 780px;
+        max-height: 92vh;
+        background: var(--phone-bg);
+        border: 2px solid var(--phone-border);
+        border-radius: 44px;
+        box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 40px rgba(139, 92, 246, 0.15);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        position: relative;
+      }
+
+      /* Phone Dynamic Island / Speaker */
+      .phone-notch {
+        width: 120px;
+        height: 24px;
+        background: #000;
+        border-radius: 0 0 16px 16px;
+        margin: 0 auto;
         display: flex;
         align-items: center;
         justify-content: center;
         gap: 8px;
-        transition:
-          background 0.15s ease,
-          transform 0.1s ease;
+        z-index: 10;
       }
 
-      .btn-mic:hover {
-        background: var(--accent-hover);
+      .camera-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #1e293b;
       }
 
-      .btn-mic.active {
-        background: var(--red);
+      .speaker-slot {
+        width: 40px;
+        height: 4px;
+        border-radius: 2px;
+        background: #1e293b;
       }
 
-      .btn-barge {
-        height: 44px;
-        padding: 0 14px;
-        border-radius: 10px;
-        border: 1px solid #4b5563;
-        background: #1f2937;
-        color: #e5e7eb;
-        font-size: 0.82rem;
-        font-weight: 600;
-        cursor: pointer;
-        display: flex;
+      /* Call Screen Header */
+      .call-header {
+        padding: 20px 24px 10px;
+        text-align: center;
+        position: relative;
+      }
+
+      .clinic-name {
+        font-size: 1.25rem;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+        color: #ffffff;
+      }
+
+      .doctor-subtitle {
+        font-size: 0.85rem;
+        color: #a78bfa;
+        margin-top: 2px;
+      }
+
+      .call-status-pill {
+        display: inline-flex;
         align-items: center;
         gap: 6px;
+        margin-top: 10px;
+        padding: 4px 14px;
+        border-radius: 9999px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: var(--text-muted);
       }
 
-      .btn-barge:hover {
-        background: #374151;
+      .call-status-pill.active {
+        background: rgba(16, 185, 129, 0.15);
+        border-color: rgba(16, 185, 129, 0.3);
+        color: #6ee7b7;
       }
 
-      /* Sidebar Debug & Latency Panel */
-      .debug-panel {
-        background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        border-radius: 16px;
-        padding: 18px;
+      /* Avatar & Soundwaves */
+      .avatar-container {
         display: flex;
         flex-direction: column;
-        gap: 14px;
-        height: 640px;
-        overflow-y: auto;
+        align-items: center;
+        justify-content: center;
+        padding: 16px 20px;
+        position: relative;
       }
 
-      .panel-title {
-        font-size: 0.85rem;
-        font-weight: 700;
-        color: #fff;
+      .avatar-ripple-box {
+        position: relative;
+        width: 110px;
+        height: 110px;
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        justify-content: center;
       }
 
-      .metric-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
+      .avatar-ripple {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        border: 2px solid var(--accent);
+        opacity: 0;
+        transform: scale(0.9);
       }
 
-      .metric-card {
-        background: #0f0d20;
-        border: 1px solid #1f1b3d;
-        border-radius: 10px;
-        padding: 9px 12px;
+      .calling .avatar-ripple {
+        animation: ripple 2s infinite cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+
+      @keyframes ripple {
+        0% {
+          transform: scale(0.9);
+          opacity: 0.8;
+        }
+        100% {
+          transform: scale(1.6);
+          opacity: 0;
+        }
+      }
+
+      .avatar-circle {
+        width: 88px;
+        height: 88px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+        border: 3px solid rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.4rem;
+        box-shadow: 0 10px 25px -5px rgba(124, 58, 237, 0.5);
+        z-index: 2;
+        transition: transform 0.3s ease;
+      }
+
+      .avatar-circle.talking {
+        transform: scale(1.06);
+        box-shadow: 0 0 35px rgba(139, 92, 246, 0.8);
+      }
+
+      /* Waveform visualizer */
+      .waveform-bar-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        height: 36px;
+        margin-top: 10px;
+      }
+
+      .waveform-bar {
+        width: 4px;
+        height: 8px;
+        background: #6366f1;
+        border-radius: 2px;
+        transition: height 0.1s ease;
+      }
+
+      .waveform-bar.active {
+        animation: waveAnim 0.8s ease-in-out infinite alternate;
+      }
+
+      @keyframes waveAnim {
+        0% { height: 6px; background: #6366f1; }
+        50% { height: 28px; background: #a855f7; }
+        100% { height: 12px; background: #38bdf8; }
+      }
+
+      /* Live Captions / Transcript Chat Box */
+      .transcript-container {
+        flex: 1;
+        margin: 0 16px 12px;
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid var(--glass-border);
+        border-radius: 20px;
+        padding: 14px;
+        overflow-y: auto;
         display: flex;
         flex-direction: column;
-        gap: 3px;
+        gap: 10px;
+        scroll-behavior: smooth;
       }
 
-      .metric-label {
-        font-size: 0.7rem;
-        color: var(--text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
+      .bubble {
+        max-width: 86%;
+        padding: 10px 14px;
+        border-radius: 16px;
+        font-size: 0.84rem;
+        line-height: 1.45;
+        animation: fadeIn 0.25s ease forwards;
       }
 
-      .metric-val {
-        font-family: var(--font-mono);
-        font-size: 1.15rem;
-        font-weight: 700;
-        color: var(--text);
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
       }
 
-      .metric-val.green {
-        color: var(--green);
-      }
-      .metric-val.yellow {
-        color: var(--yellow);
-      }
-      .metric-val.red {
-        color: var(--red);
+      .bubble.agent {
+        align-self: flex-start;
+        background: rgba(124, 58, 237, 0.25);
+        border: 1px solid rgba(139, 92, 246, 0.35);
+        color: #f1f5f9;
+        border-bottom-left-radius: 4px;
       }
 
-      .target-banner {
-        background: #1e1b4b;
-        border: 1px solid #4338ca;
-        border-radius: 10px;
-        padding: 10px 12px;
+      .bubble.user {
+        align-self: flex-end;
+        background: #2563eb;
+        color: #ffffff;
+        border-bottom-right-radius: 4px;
+      }
+
+      .bubble.system-alert {
+        align-self: center;
+        background: rgba(239, 68, 68, 0.2);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        color: #fca5a5;
         font-size: 0.78rem;
-        line-height: 1.4;
-        color: #c4b5fd;
+        text-align: center;
       }
 
-      .log-box {
-        background: #090812;
-        border: 1px solid #1f1b3d;
-        border-radius: 8px;
-        padding: 10px;
-        font-family: var(--font-mono);
-        font-size: 0.68rem;
-        color: #9ca3af;
-        height: 150px;
-        overflow-y: auto;
-        white-space: pre-wrap;
+      .bubble.booked-success {
+        align-self: center;
+        background: rgba(16, 185, 129, 0.2);
+        border: 1px solid rgba(16, 185, 129, 0.4);
+        color: #86efac;
+        font-size: 0.78rem;
+        text-align: center;
+        font-weight: 600;
+      }
+
+      /* Quick Suggested Prompts */
+      .quick-chips-container {
+        padding: 0 16px 10px;
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        white-space: nowrap;
+        scrollbar-width: none;
+      }
+
+      .quick-chips-container::-webkit-scrollbar {
+        display: none;
+      }
+
+      .chip-btn {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        color: #cbd5e1;
+        padding: 6px 12px;
+        border-radius: 9999px;
+        font-size: 0.74rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .chip-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.25);
+        color: #fff;
+      }
+
+      /* Manual Text Input Bar */
+      .input-bar {
+        padding: 0 16px 12px;
+        display: flex;
+        gap: 8px;
+      }
+
+      .text-field {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--glass-border);
+        border-radius: 9999px;
+        padding: 8px 16px;
+        color: #fff;
+        font-size: 0.85rem;
+        font-family: inherit;
+        outline: none;
+      }
+
+      .text-field:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-glow);
+      }
+
+      .btn-send {
+        background: var(--accent);
+        border: none;
+        color: #fff;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+
+      /* Call Controls Footer */
+      .call-controls {
+        background: rgba(11, 15, 25, 0.9);
+        border-top: 1px solid var(--phone-border);
+        padding: 16px 24px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+      }
+
+      .control-btn {
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        color: #fff;
+        position: relative;
+      }
+
+      .control-btn.btn-mic {
+        background: #1e293b;
+        font-size: 1.3rem;
+      }
+
+      .control-btn.btn-mic.recording {
+        background: #dc2626;
+        box-shadow: 0 0 20px rgba(220, 38, 38, 0.7);
+        animation: pulseMic 1.2s infinite;
+      }
+
+      @keyframes pulseMic {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+      }
+
+      .control-btn.btn-dial {
+        background: #10b981;
+        width: 66px;
+        height: 66px;
+        font-size: 1.6rem;
+        box-shadow: 0 8px 25px -4px rgba(16, 185, 129, 0.5);
+      }
+
+      .control-btn.btn-hangup {
+        background: #ef4444;
+        width: 66px;
+        height: 66px;
+        font-size: 1.6rem;
+        box-shadow: 0 8px 25px -4px rgba(239, 68, 68, 0.5);
+      }
+
+      .control-btn:hover {
+        transform: translateY(-2px);
+      }
+
+      .control-btn:active {
+        transform: translateY(1px);
+      }
+
+      .btn-label {
+        font-size: 0.65rem;
+        color: var(--text-muted);
+        margin-top: 4px;
       }
     </style>
   </head>
   <body>
-    <header>
-      <div class="brand">
-        <img
-          src="/logo.jpg"
-          alt="Appointly Logo"
-          class="logo-img"
-          onerror="this.style.display = 'none'"
+    <!-- Top Bar Navigation -->
+    <div class="top-nav">
+      <a href="/" class="btn-nav" target="_blank" title="Open Doctor Dashboard in new tab">
+        <span>👨‍⚕️</span> Doctor Dashboard ↗
+      </a>
+      <div class="ai-badge">
+        <span class="ai-pulse-dot"></span>
+        <span id="aiModelBadge">Gemini 2.5 Live</span>
+      </div>
+    </div>
+
+    <!-- Realistic Mobile Call Device -->
+    <div class="phone-frame" id="phoneContainer">
+      <!-- Notch / Dynamic Island -->
+      <div class="phone-notch">
+        <div class="speaker-slot"></div>
+        <div class="camera-dot"></div>
+      </div>
+
+      <!-- Call Header -->
+      <div class="call-header">
+        <div class="clinic-name" id="clinicNameDisplay">Arogya Medical Clinic</div>
+        <div class="doctor-subtitle" id="doctorSubtitleDisplay">AI Receptionist • Dr. Ramesh Sharma</div>
+        <div class="call-status-pill" id="callStatusPill">
+          <span>⚪</span>
+          <span id="callStatusText">Ready to Dial</span>
+        </div>
+      </div>
+
+      <!-- Avatar & Sound Waves -->
+      <div class="avatar-container" id="avatarArea">
+        <div class="avatar-ripple-box">
+          <div class="avatar-ripple"></div>
+          <div class="avatar-circle" id="avatarCircle">👩‍⚕️</div>
+        </div>
+
+        <div class="waveform-bar-container" id="waveformContainer">
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+        </div>
+      </div>
+
+      <!-- Live Captions & Conversation Stream -->
+      <div class="transcript-container" id="transcriptBox">
+        <div class="bubble agent">
+          Namaste! <strong>Arogya Clinic</strong> mein aapka swagat hai. Main AI receptionist bol rahi hoon. Niche green call button daba kar baat shuru karein.
+        </div>
+      </div>
+
+      <!-- Quick Dialogue Scenario Chips -->
+      <div class="quick-chips-container">
+        <button class="chip-btn" onclick="sendQuickPrompt('Mujhe kal subah Dr. Sharma ke paas appointment book karna hai.')">
+          📅 Book Kal Subah
+        </button>
+        <button class="chip-btn" onclick="sendQuickPrompt('Doctor ki OPD timing aur consultation fee kya hai?')">
+          ⏰ Timing &amp; Fee
+        </button>
+        <button class="chip-btn" onclick="sendQuickPrompt('Mera seene me bohot tez dard ho raha hai, saas lene me takleef hai.')">
+          🚨 Emergency
+        </button>
+        <button class="chip-btn" onclick="sendQuickPrompt('Mera phone number 9876543210 hai, appointment cancel kar dijiye.')">
+          ❌ Cancel Slot
+        </button>
+      </div>
+
+      <!-- Manual Input Option -->
+      <div class="input-bar">
+        <input
+          type="text"
+          id="manualTextInput"
+          class="text-field"
+          placeholder="Speak or type Hinglish message..."
+          onkeydown="if(event.key==='Enter') sendManualText()"
         />
-        <div>
-          <h1>Appointly Voice Tester</h1>
-          <div class="sub-brand">Gnani AI Voice Agent • Manual Interactive Testing & Latency Telemetry</div>
-        </div>
-      </div>
-      <div class="badge-state" id="callStateBadge">DISCONNECTED</div>
-    </header>
-
-    <div class="container">
-      <!-- Live Conversation Stream -->
-      <div class="chat-panel">
-        <!-- Input Mode Selection -->
-        <div class="mode-bar">
-          <span style="color: #c4b5fd; font-weight: 600">🎯 Testing Mode:</span>
-          <div class="mode-toggle-group">
-            <button class="mode-toggle-btn active" id="btnModeManual" onclick="setInputMode('manual')" title="User decides every turn by typing, clicking chips, or speaking with Browser Voice. No automated loops!">
-              ✋ Manual Control (Recommended)
-            </button>
-            <button class="mode-toggle-btn" id="btnModeContinuous" onclick="setInputMode('continuous')" title="Continuous raw mic streaming with server VAD">
-              🎙️ Continuous Mic
-            </button>
-          </div>
-        </div>
-
-        <div class="messages-container" id="messagesBox">
-          <div class="bubble bubble-agent">
-            <strong>Namaste!</strong> Welcome to Appointly Voice Agent testing.<br />
-            Click <strong>Start Call</strong> to connect, then type your query in Hinglish, speak using your browser mic, or click any quick scenario chip below!
-          </div>
-        </div>
-
-        <!-- Quick Clinical Scenario Chips -->
-        <div class="chips-bar">
-          <button class="chip-btn" onclick="sendChipTurn('Mujhe kal shaam 6:00 baje Dr. Sharma ke paas appointment chahiye fever ke liye')">
-            🩺 Dr. Sharma kal 6 PM
-          </button>
-          <button class="chip-btn" onclick="sendChipTurn('Dr. Priya se consult karna hai kal subah 10:30 baje bache ke checkup ke liye')">
-            👶 Dr. Priya kal 10:30 AM
-          </button>
-          <button class="chip-btn" onclick="sendChipTurn('Mujhe meri appointment reschedule karni hai')">
-            🔄 Reschedule
-          </button>
-          <button class="chip-btn" onclick="sendChipTurn('Mujhe apni appointment cancel karwani hai')">
-            ❌ Cancel
-          </button>
-          <button class="chip-btn" onclick="sendChipTurn('Emergency hai! Mere seene mein bohot tez dard ho raha hai aur saans lene me dikkat ho rahi hai!')" style="border-color: #ef4444; color: #fca5a5;">
-            🚨 Emergency (108 Triage)
-          </button>
-          <button class="chip-btn" onclick="sendChipTurn('Mera naam Rahul Verma hai aur phone number 9876543210 hai')">
-            👤 Name & Phone Verification
-          </button>
-          <button class="chip-btn" onclick="sendChipTurn('Haan bilkul, confirm kar dijiye booking')">
-            ✅ Haan Confirm Kijiye
-          </button>
-        </div>
-
-        <!-- Manual Turn Input Bar -->
-        <div class="manual-input-bar">
-          <input
-            type="text"
-            id="manualInputText"
-            class="manual-text-input"
-            placeholder="Type your message in Hinglish (e.g. 'Dr. Sharma kal 6 baje')..."
-            autocomplete="off"
-          />
-          <button class="btn-browser-voice" id="btnBrowserVoice" title="Speak into your microphone — recognized directly in your browser without canned responses!">
-            <span id="btnBrowserVoiceText">🎙️ Speak</span>
-          </button>
-          <button class="btn-send" id="btnSendTurn" title="Send custom Hinglish turn">
-            <span>💬 Send</span>
-          </button>
-        </div>
-
-        <!-- Call Controls Bar -->
-        <div class="controls-bar">
-          <button class="btn-mic" id="btnToggleCall">
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" y1="19" x2="12" y2="22" />
-            </svg>
-            <span id="btnText">Start Call</span>
-          </button>
-
-          <button class="btn-barge" id="btnBargeIn" title="Interrupt agent speech immediately">
-            <span>⏹ Barge-in</span>
-          </button>
-        </div>
+        <button class="btn-send" onclick="sendManualText()" title="Send Message">➤</button>
       </div>
 
-      <!-- Latency & Telemetry Debug Panel -->
-      <div class="debug-panel">
-        <div class="panel-title">
-          <span>Turn Latency</span>
-          <span style="font-size: 0.75rem; color: #a78bfa" id="turnCounter">Turn 0</span>
+      <!-- Call Controls (Dial / Mic / End Call) -->
+      <div class="call-controls">
+        <!-- Mic Button -->
+        <div style="text-align: center">
+          <button class="control-btn btn-mic" id="btnMic" onclick="toggleMicrophone()" title="Toggle Voice Mic">
+            🎙️
+          </button>
+          <div class="btn-label" id="micLabel">Mic Off</div>
         </div>
 
-        <div class="metric-grid">
-          <div class="metric-card">
-            <span class="metric-label">STT (Speech)</span>
-            <span class="metric-val" id="metricStt">-- ms</span>
-          </div>
-          <div class="metric-card">
-            <span class="metric-label">Brain TTFT</span>
-            <span class="metric-val" id="metricLlm">-- ms</span>
-          </div>
-          <div class="metric-card">
-            <span class="metric-label">TTS 1st Byte</span>
-            <span class="metric-val" id="metricTts">-- ms</span>
-          </div>
-          <div class="metric-card">
-            <span class="metric-label">Total Voice</span>
-            <span class="metric-val" id="metricTotal">-- ms</span>
-          </div>
+        <!-- Main Call Action Button (Dial / Hangup) -->
+        <div style="text-align: center">
+          <button class="control-btn btn-dial" id="btnCallAction" onclick="toggleCall()" title="Start Live Call">
+            📞
+          </button>
+          <div class="btn-label" id="callActionLabel">Call Clinic</div>
         </div>
 
-        <div class="panel-title" style="margin-top: 6px">
-          <span>Aggregate Stats</span>
+        <!-- Speaker Button -->
+        <div style="text-align: center">
+          <button class="control-btn btn-mic" id="btnSpeaker" onclick="toggleSpeaker()" title="Toggle Voice Speaker">
+            🔊
+          </button>
+          <div class="btn-label" id="speakerLabel">Speaker On</div>
         </div>
-        <div class="metric-grid">
-          <div class="metric-card">
-            <span class="metric-label">P50 Latency</span>
-            <span class="metric-val green" id="statP50">-- ms</span>
-          </div>
-          <div class="metric-card">
-            <span class="metric-label">P95 Latency</span>
-            <span class="metric-val yellow" id="statP95">-- ms</span>
-          </div>
-        </div>
-
-        <div class="target-banner">
-          ⏱️ Target: <strong>&le; 1,500 ms</strong> response latency.<br />
-          Pre-cached phrases hit in <strong>&le; 100 ms</strong>.
-        </div>
-
-        <div class="panel-title" style="margin-top: 6px">
-          <span>Telemetry Log</span>
-        </div>
-        <div class="log-box" id="logBox">System ready. Waiting for session initiation.</div>
       </div>
     </div>
 
     <script>
-      let ws = null;
-      let audioContext = null;
-      let micStream = null;
-      let processorNode = null;
-      let audioQueue = [];
-      let isPlayingAudio = false;
-      let activeCall = false;
-      let currentInputMode = 'manual'; // 'manual' | 'continuous'
+      let isCallActive = false;
+      let isRecording = false;
+      let isSpeakerOn = true;
+      let callTimer = null;
+      let callSeconds = 0;
+      let callId = 'call_' + Date.now();
+      let conversationHistory = [];
       let speechRecognizer = null;
-      let isRecognizingSpeech = false;
+      let isSpeakingAudio = false;
 
-      const btnToggleCall = document.getElementById('btnToggleCall');
-      const btnText = document.getElementById('btnText');
-      const btnBargeIn = document.getElementById('btnBargeIn');
-      const callStateBadge = document.getElementById('callStateBadge');
-      const messagesBox = document.getElementById('messagesBox');
-      const logBox = document.getElementById('logBox');
-      const manualInputText = document.getElementById('manualInputText');
-      const btnSendTurn = document.getElementById('btnSendTurn');
-      const btnBrowserVoice = document.getElementById('btnBrowserVoice');
-      const btnBrowserVoiceText = document.getElementById('btnBrowserVoiceText');
-      const btnModeManual = document.getElementById('btnModeManual');
-      const btnModeContinuous = document.getElementById('btnModeContinuous');
+      // Audio Elements
+      const audioRing = new Audio('https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3');
+      audioRing.loop = true;
 
-      const metricStt = document.getElementById('metricStt');
-      const metricLlm = document.getElementById('metricLlm');
-      const metricTts = document.getElementById('metricTts');
-      const metricTotal = document.getElementById('metricTotal');
-      const statP50 = document.getElementById('statP50');
-      const statP95 = document.getElementById('statP95');
-      const turnCounter = document.getElementById('turnCounter');
+      // Initialize on load
+      window.addEventListener('DOMContentLoaded', async () => {
+        initSpeechRecognition();
+        await loadClinicProfile();
+      });
 
-      function log(msg) {
-        const time = new Date().toLocaleTimeString();
-        logBox.innerText += `\n[${time}] ${msg}`;
-        logBox.scrollTop = logBox.scrollHeight;
-      }
-
-      function addBubble(text, type = 'agent') {
-        const div = document.createElement('div');
-        div.className = `bubble bubble-${type}`;
-        div.innerText = text;
-        messagesBox.appendChild(div);
-        messagesBox.scrollTop = messagesBox.scrollHeight;
-      }
-
-      function setState(state) {
-        callStateBadge.innerText = state;
-        if (state === 'CONNECTED' || state === 'UNDERSTAND_INTENT') {
-          callStateBadge.style.color = '#10b981';
-        } else if (state === 'PROCESSING') {
-          callStateBadge.style.color = '#f59e0b';
-        } else if (state === 'ESCALATE') {
-          callStateBadge.style.color = '#ef4444';
-        } else {
-          callStateBadge.style.color = '#c4b5fd';
+      async function loadClinicProfile() {
+        try {
+          const res = await fetch('/api/clinic/profile');
+          if (res.ok) {
+            const data = await res.json();
+            if (data.profile && data.profile.clinicName) {
+              document.getElementById('clinicNameDisplay').textContent = data.profile.clinicName;
+            }
+            if (data.doctors && data.doctors.length > 0) {
+              const d0 = data.doctors[0];
+              document.getElementById('doctorSubtitleDisplay').textContent = `AI Receptionist • ${d0.name} (${d0.specialty})`;
+            }
+          }
+        } catch (e) {
+          console.warn('Could not load clinic profile:', e);
         }
       }
 
-      function setInputMode(mode) {
-        currentInputMode = mode;
-        if (mode === 'manual') {
-          btnModeManual.classList.add('active');
-          btnModeContinuous.classList.remove('active');
-          log('Switched to Manual Control Mode (Zero auto-loop; user sends turns manually).');
-        } else {
-          btnModeContinuous.classList.add('active');
-          btnModeManual.classList.remove('active');
-          log('Switched to Continuous Mic Mode (Mic streams raw audio to server VAD).');
-        }
-      }
-
-      // Initialize Speech Recognition
       function initSpeechRecognition() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-          log('Web Speech API is not supported in this browser. You can type queries in the text box.');
-          btnBrowserVoice.style.display = 'none';
+          console.warn('Browser does not support Web Speech API');
           return;
         }
 
         speechRecognizer = new SpeechRecognition();
-        speechRecognizer.continuous = false;
-        speechRecognizer.interimResults = true;
-        speechRecognizer.lang = 'hi-IN'; // Hinglish / Hindi
+        speechRecognizer.lang = 'hi-IN';
+        speechRecognizer.continuous = true;
+        speechRecognizer.interimResults = false;
 
-        speechRecognizer.onstart = () => {
-          isRecognizingSpeech = true;
-          btnBrowserVoice.classList.add('listening');
-          btnBrowserVoiceText.innerText = '🔴 Listening...';
-          manualInputText.placeholder = 'Speak clearly into your microphone now...';
-          log('Browser speech recognition active. Speak now...');
-        };
-
-        speechRecognizer.onresult = (e) => {
-          let interim = '';
-          for (let i = e.resultIndex; i < e.results.length; i++) {
-            interim += e.results[i][0].transcript;
+        speechRecognizer.onresult = (event) => {
+          const lastIdx = event.results.length - 1;
+          const transcript = event.results[lastIdx][0].transcript.trim();
+          if (transcript) {
+            handleUserTurn(transcript);
           }
-          manualInputText.value = interim;
         };
 
-        speechRecognizer.onerror = (e) => {
-          log(`Speech recognition notice: ${e.error}`);
-          stopBrowserVoice();
+        speechRecognizer.onerror = (event) => {
+          console.warn('Speech recognition error:', event.error);
         };
 
         speechRecognizer.onend = () => {
-          stopBrowserVoice();
-          const recognizedText = manualInputText.value.trim();
-          if (recognizedText.length > 0) {
-            log(`Voice recognized: "${recognizedText}"`);
-            sendManualTurn(recognizedText);
+          if (isCallActive && isRecording) {
+            try { speechRecognizer.start(); } catch (e) {}
           }
         };
       }
 
-      function toggleBrowserVoice() {
-        if (!speechRecognizer) {
-          initSpeechRecognition();
-        }
-        if (!speechRecognizer) return;
-
-        if (isRecognizingSpeech) {
-          speechRecognizer.stop();
+      function toggleCall() {
+        if (!isCallActive) {
+          startCall();
         } else {
-          manualInputText.value = '';
-          try {
-            speechRecognizer.start();
-          } catch (err) {
-            console.warn('Could not start speech recognition:', err);
-          }
+          endCall();
         }
       }
-
-      function stopBrowserVoice() {
-        isRecognizingSpeech = false;
-        btnBrowserVoice.classList.remove('listening');
-        btnBrowserVoiceText.innerText = '🎙️ Speak';
-        manualInputText.placeholder = "Type your message in Hinglish (e.g. 'Dr. Sharma kal 6 baje')...";
-      }
-
-      btnBrowserVoice.addEventListener('click', () => {
-        if (!activeCall) {
-          startCall().then(() => toggleBrowserVoice());
-        } else {
-          toggleBrowserVoice();
-        }
-      });
-
-      // Manual Turn Submission
-      async function sendManualTurn(text) {
-        const trimmed = (text || '').trim();
-        if (!trimmed) return;
-
-        if (!activeCall || !ws || ws.readyState !== WebSocket.OPEN) {
-          log('Initiating call session first...');
-          await startCall();
-          // Short delay to allow WS handshake
-          await new Promise((r) => setTimeout(r, 600));
-        }
-
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          log(`[User Turn] Sending: "${trimmed}"`);
-          ws.send(JSON.stringify({ type: 'user_text', text: trimmed }));
-          manualInputText.value = '';
-        } else {
-          log('Call session not active. Please click Start Call.');
-        }
-      }
-
-      btnSendTurn.addEventListener('click', () => {
-        sendManualTurn(manualInputText.value);
-      });
-
-      manualInputText.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          sendManualTurn(manualInputText.value);
-        }
-      });
-
-      window.sendChipTurn = function (text) {
-        sendManualTurn(text);
-      };
-
-      btnToggleCall.addEventListener('click', async () => {
-        if (!activeCall) {
-          await startCall();
-        } else {
-          stopCall();
-        }
-      });
-
-      btnBargeIn.addEventListener('click', () => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          log('User clicked Barge-In');
-          ws.send(JSON.stringify({ type: 'interrupt' }));
-          stopAudioPlayback();
-        }
-      });
 
       async function startCall() {
-        try {
-          log('Requesting short-lived session token...');
-          btnText.innerText = 'Connecting...';
+        isCallActive = true;
+        callSeconds = 0;
+        callId = 'call_' + Date.now();
+        conversationHistory = [];
 
-          const authRes = await fetch('/api/voice/session', {
+        // UI Updates
+        document.getElementById('phoneContainer').classList.add('calling');
+        const pill = document.getElementById('callStatusPill');
+        pill.className = 'call-status-pill active';
+        document.getElementById('callStatusText').textContent = 'Connecting...';
+
+        const actionBtn = document.getElementById('btnCallAction');
+        actionBtn.className = 'control-btn btn-hangup';
+        actionBtn.innerHTML = '📴';
+        document.getElementById('callActionLabel').textContent = 'End Call';
+
+        // Play phone connect ring briefly
+        try { audioRing.play(); } catch(e){}
+
+        setTimeout(() => {
+          try { audioRing.pause(); audioRing.currentTime = 0; } catch(e){}
+          document.getElementById('callStatusText').textContent = 'Connected • 00:00';
+          startCallTimer();
+
+          // Start Microphone automatically for seamless live conversation
+          startMicrophone();
+
+          // AI Initial Greeting
+          const clinicName = document.getElementById('clinicNameDisplay').textContent;
+          const greeting = `Namaste! ${clinicName} mein aapka swagat hai. Main AI receptionist bol rahi hoon. Aaj main aapki kya sahayata kar sakti hoon?`;
+          appendBubble('agent', greeting);
+          speakText(greeting);
+        }, 1200);
+      }
+
+      function endCall() {
+        isCallActive = false;
+        clearInterval(callTimer);
+        stopMicrophone();
+        window.speechSynthesis.cancel();
+        try { audioRing.pause(); audioRing.currentTime = 0; } catch(e){}
+
+        document.getElementById('phoneContainer').classList.remove('calling');
+        const pill = document.getElementById('callStatusPill');
+        pill.className = 'call-status-pill';
+        document.getElementById('callStatusText').textContent = `Call Ended • ${formatTime(callSeconds)}`;
+
+        const actionBtn = document.getElementById('btnCallAction');
+        actionBtn.className = 'control-btn btn-dial';
+        actionBtn.innerHTML = '📞';
+        document.getElementById('callActionLabel').textContent = 'Call Clinic';
+
+        appendBubble('system-alert', `📴 Call completed (${formatTime(callSeconds)}). Summary saved to clinic records.`);
+      }
+
+      function startCallTimer() {
+        callTimer = setInterval(() => {
+          callSeconds++;
+          document.getElementById('callStatusText').textContent = `Connected • ${formatTime(callSeconds)}`;
+        }, 1000);
+      }
+
+      function formatTime(sec) {
+        const m = Math.floor(sec / 60).toString().padStart(2, '0');
+        const s = (sec % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+      }
+
+      function toggleMicrophone() {
+        if (!isRecording) {
+          startMicrophone();
+        } else {
+          stopMicrophone();
+        }
+      }
+
+      function startMicrophone() {
+        if (!speechRecognizer) return;
+        try {
+          speechRecognizer.start();
+          isRecording = true;
+          document.getElementById('btnMic').classList.add('recording');
+          document.getElementById('micLabel').textContent = 'Listening...';
+        } catch (e) {
+          console.warn('Could not start mic:', e);
+        }
+      }
+
+      function stopMicrophone() {
+        if (!speechRecognizer) return;
+        try {
+          speechRecognizer.stop();
+          isRecording = false;
+          document.getElementById('btnMic').classList.remove('recording');
+          document.getElementById('micLabel').textContent = 'Mic Off';
+        } catch (e) {}
+      }
+
+      function toggleSpeaker() {
+        isSpeakerOn = !isSpeakerOn;
+        document.getElementById('speakerLabel').textContent = isSpeakerOn ? 'Speaker On' : 'Muted';
+        if (!isSpeakerOn) window.speechSynthesis.cancel();
+      }
+
+      async function handleUserTurn(text) {
+        if (!text || text.trim().length === 0) return;
+        appendBubble('user', text);
+        animateWaveform(true);
+
+        try {
+          const res = await fetch('/api/call/turn', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ patientPhone: '9876543210' }),
+            body: JSON.stringify({
+              userText: text,
+              callId,
+              history: conversationHistory,
+            }),
           });
 
-          if (!authRes.ok) {
-            throw new Error('Failed to obtain voice session token');
-          }
+          const data = await res.json();
+          animateWaveform(false);
 
-          const authData = await authRes.json();
-          log(`Token acquired: ${authData.sessionToken.slice(0, 10)}...`);
+          if (data.replyText) {
+            appendBubble('agent', data.replyText);
+            speakText(data.replyText);
 
-          // Connect WebSocket
-          const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-          const wsUrl = `${protocol}//${location.host}${authData.wsUrl}`;
-          ws = new WebSocket(wsUrl);
-          ws.binaryType = 'arraybuffer';
+            conversationHistory.push({ role: 'user', parts: text });
+            conversationHistory.push({ role: 'model', parts: data.replyText });
 
-          ws.onopen = async () => {
-            log('WebSocket connected. Session live.');
-            activeCall = true;
-            btnToggleCall.classList.add('active');
-            btnText.innerText = 'End Call';
-            setState('CONNECTED');
-            await startAudioPlaybackContext();
-          };
-
-          ws.onmessage = async (e) => {
-            if (typeof e.data === 'string') {
-              const msg = JSON.parse(e.data);
-              handleServerEvent(msg);
-            } else {
-              // Binary audio chunk (WAV/PCM from TTS)
-              enqueueAudioChunk(e.data);
+            if (data.actionTaken === 'booked') {
+              appendBubble('booked-success', '✅ Appointment Confirmed & Saved to Doctor Dashboard!');
+            } else if (data.actionTaken === 'emergency') {
+              appendBubble('system-alert', '🚨 Emergency Escalation Dispatched to Doctor Dashboard!');
             }
-          };
-
-          ws.onclose = () => {
-            log('WebSocket closed');
-            stopCall();
-          };
-
-          ws.onerror = (err) => {
-            log('WebSocket error occurred');
-            console.error(err);
-            stopCall();
-          };
-        } catch (err) {
-          log(`Error: ${err.message}`);
-          stopCall();
-        }
-      }
-
-      function handleServerEvent(msg) {
-        if (msg.type === 'session_ready') {
-          log(`Session ready: callId=${msg.callId}`);
-          setState(msg.state || 'LISTENING');
-        } else if (msg.type === 'agent_text') {
-          addBubble(msg.text, msg.state === 'ESCALATE' ? 'emergency' : 'agent');
-          if (msg.state) setState(msg.state);
-          if (msg.turnIndex) turnCounter.innerText = `Turn ${msg.turnIndex}`;
-        } else if (msg.type === 'transcript') {
-          addBubble(msg.text, 'user');
-        } else if (msg.type === 'filler') {
-          addBubble(msg.text, 'filler');
-        } else if (msg.type === 'interrupt') {
-          log('Server acknowledged barge-in. Clearing playback.');
-          stopAudioPlayback();
-        } else if (msg.type === 'latency') {
-          updateLatencyMetrics(msg.metrics, msg.summary);
-        } else if (msg.type === 'state') {
-          setState(msg.state);
-        }
-      }
-
-      function updateLatencyMetrics(metrics, summary) {
-        metricStt.innerText = `${metrics.stt_ms} ms`;
-        metricLlm.innerText = `${metrics.llm_first_token_ms} ms`;
-        metricTts.innerText = `${metrics.tts_first_audio_ms} ms`;
-        metricTotal.innerText = `${metrics.total_ms} ms`;
-
-        if (metrics.total_ms <= 1500) {
-          metricTotal.className = 'metric-val green';
-        } else if (metrics.total_ms <= 2000) {
-          metricTotal.className = 'metric-val yellow';
-        } else {
-          metricTotal.className = 'metric-val red';
-        }
-
-        if (summary) {
-          statP50.innerText = `${summary.p50_total_ms} ms`;
-          statP95.innerText = `${summary.p95_total_ms} ms`;
-        }
-      }
-
-      async function startAudioPlaybackContext() {
-        if (!audioContext) {
-          audioContext = new (window.AudioContext || window.webkitAudioContext)({
-            sampleRate: 16000,
-          });
-        }
-        if (audioContext.state === 'suspended') {
-          await audioContext.resume();
-        }
-
-        // Only start continuous raw mic streaming if user specifically selected Continuous Mic mode
-        if (currentInputMode === 'continuous') {
-          try {
-            micStream = await navigator.mediaDevices.getUserMedia({
-              audio: { channelCount: 1, sampleRate: 16000 },
-            });
-            const source = audioContext.createMediaStreamSource(micStream);
-            processorNode = audioContext.createScriptProcessor(4096, 1, 1);
-            processorNode.onaudioprocess = (e) => {
-              if (!activeCall || !ws || ws.readyState !== WebSocket.OPEN) return;
-              if (currentInputMode !== 'continuous') return;
-              const inputData = e.inputBuffer.getChannelData(0);
-              const pcmBuffer = new Int16Array(inputData.length);
-              for (let i = 0; i < inputData.length; i++) {
-                const s = Math.max(-1, Math.min(1, inputData[i]));
-                pcmBuffer[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-              }
-              ws.send(pcmBuffer.buffer);
-            };
-            source.connect(processorNode);
-            processorNode.connect(audioContext.destination);
-            log('Continuous raw mic streaming active (16kHz PCM).');
-          } catch (err) {
-            log(`Mic permission not granted: ${err.message}`);
           }
-        } else {
-          log('Audio player ready. You are in Manual Mode: send turns via Text, Voice button, or Scenario chips.');
-        }
-      }
-
-      function enqueueAudioChunk(arrayBuffer) {
-        audioQueue.push(arrayBuffer);
-        if (!isPlayingAudio) {
-          playNextAudioChunk();
-        }
-      }
-
-      async function playNextAudioChunk() {
-        if (audioQueue.length === 0) {
-          isPlayingAudio = false;
-          return;
-        }
-        isPlayingAudio = true;
-        const chunk = audioQueue.shift();
-
-        try {
-          if (!audioContext) audioContext = new AudioContext();
-          const audioBuffer = await audioContext.decodeAudioData(chunk.slice(0));
-          const source = audioContext.createBufferSource();
-          source.buffer = audioBuffer;
-          source.connect(audioContext.destination);
-          source.onended = () => {
-            playNextAudioChunk();
-          };
-          source.start(0);
         } catch (err) {
-          console.error('Audio decode error:', err);
-          playNextAudioChunk();
+          console.error('Call turn error:', err);
+          animateWaveform(false);
+          const fallback = 'Kripya ek baar dobara kahiye, main sun nahi paayi.';
+          appendBubble('agent', fallback);
+          speakText(fallback);
         }
       }
 
-      function stopAudioPlayback() {
-        audioQueue = [];
-        isPlayingAudio = false;
+      function sendManualText() {
+        const input = document.getElementById('manualTextInput');
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = '';
+        if (!isCallActive) startCall();
+        handleUserTurn(text);
       }
 
-      function stopCall() {
-        activeCall = false;
-        btnToggleCall.classList.remove('active');
-        btnText.innerText = 'Start Call';
-        setState('DISCONNECTED');
-        stopAudioPlayback();
-        stopBrowserVoice();
-
-        if (processorNode) {
-          processorNode.disconnect();
-          processorNode = null;
-        }
-        if (micStream) {
-          micStream.getTracks().forEach((t) => t.stop());
-          micStream = null;
-        }
-        if (ws) {
-          ws.close();
-          ws = null;
-        }
-        log('Call ended.');
+      function sendQuickPrompt(promptText) {
+        if (!isCallActive) startCall();
+        handleUserTurn(promptText);
       }
 
-      // Initialize speech recognition capabilities on page load
-      window.addEventListener('DOMContentLoaded', () => {
-        initSpeechRecognition();
-      });
+      function appendBubble(type, text) {
+        const box = document.getElementById('transcriptBox');
+        const bubble = document.createElement('div');
+        bubble.className = `bubble ${type}`;
+        bubble.innerHTML = escapeHtml(text);
+        box.appendChild(bubble);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function speakText(text) {
+        if (!isSpeakerOn) return;
+        if (!window.speechSynthesis) return;
+
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+
+        // Try to pick natural Hindi or Indian English voice
+        const voices = window.speechSynthesis.getVoices();
+        const indicVoice = voices.find(
+          (v) => v.lang.includes('hi') || v.lang.includes('IN') || v.name.includes('India')
+        );
+        if (indicVoice) utterance.voice = indicVoice;
+
+        utterance.onstart = () => {
+          document.getElementById('avatarCircle').classList.add('talking');
+          animateWaveform(true);
+        };
+        utterance.onend = () => {
+          document.getElementById('avatarCircle').classList.remove('talking');
+          animateWaveform(false);
+        };
+
+        window.speechSynthesis.speak(utterance);
+      }
+
+      function animateWaveform(active) {
+        const bars = document.querySelectorAll('.waveform-bar');
+        bars.forEach((bar) => {
+          if (active) {
+            bar.classList.add('active');
+          } else {
+            bar.classList.remove('active');
+          }
+        });
+      }
+
+      function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+      }
     </script>
   </body>
 </html>

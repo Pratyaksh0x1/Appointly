@@ -960,11 +960,12 @@
 
         <div class="nav-actions">
           <a
-            href="/voice-test.html"
+            href="/call"
+            target="_blank"
             class="status-badge"
-            style="text-decoration: none; background: #7e22ce; color: #ffffff; font-weight: 700"
+            style="text-decoration: none; background: #16a34a; color: #ffffff; font-weight: 800; box-shadow: 0 0 15px rgba(22, 163, 74, 0.4); padding: 8px 16px; font-size: 0.85rem;"
           >
-            🎙️ Live Voice Mic Test &rarr;
+            📞 Open Live Patient Call (Gemini) ↗
           </a>
 
           <div class="status-badge" id="sseStatus">
@@ -2664,23 +2665,20 @@
           ${
             canAction
               ? `
-            <button class="btn-action btn-complete" onclick="markAppointmentComplete('${apt.id}'); closeAppointmentDetailsModal();">
-              ✅ Complete Visit
+            <button class="btn-action btn-reschedule" onclick="closeAppointmentDetailsModal(); openRescheduleModal('${apt.id}');" style="padding: 10px 20px; font-weight: 700; font-size: 0.9rem; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 8px;">
+              🔄 Reschedule kar do
             </button>
-            <button class="btn-action btn-reschedule" onclick="closeAppointmentDetailsModal(); openRescheduleModal('${apt.id}');">
-              🔄 Reschedule
-            </button>
-            <button class="btn-action btn-cancel" onclick="cancelAppointment('${apt.id}'); closeAppointmentDetailsModal();">
-              ❌ Cancel
+            <button class="btn-action btn-cancel" onclick="cancelAppointment('${apt.id}'); closeAppointmentDetailsModal();" style="padding: 10px 20px; font-weight: 700; font-size: 0.9rem; background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; border-radius: 8px;">
+              ❌ Cancel kar do
             </button>
           `
               : `
-            <span style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; align-self: center; margin-right: auto;">
-              Appointment is ${apt.status.toLowerCase()}
+            <span style="font-size: 0.8rem; color: var(--text-muted); font-style: italic; align-self: center; margin-right: auto;">
+              Appointment status: <strong>${apt.status}</strong>
             </span>
           `
           }
-          <button class="btn-action" onclick="closeAppointmentDetailsModal()">Close</button>
+          <button class="btn-action" onclick="closeAppointmentDetailsModal()" style="padding: 10px 18px; border-radius: 8px;">Close</button>
         `;
 
         document.getElementById('appointmentDetailsModal').style.display = 'flex';
@@ -3098,9 +3096,11 @@
         if (!doctor || !grid) return;
 
         // Working hours
-        const startHour = parseInt((doctor.workingHoursStart || '17:00').split(':')[0], 10);
-        const endHour = parseInt((doctor.workingHoursEnd || '22:00').split(':')[0], 10);
         const duration = doctor.durationMinutes || 30;
+        const [startH, startM] = (doctor.workingHoursStart || '09:00').split(':').map((v) => parseInt(v, 10));
+        const [endH, endM] = (doctor.workingHoursEnd || '21:00').split(':').map((v) => parseInt(v, 10));
+        const startMin = startH * 60 + (startM || 0);
+        const endMin = endH * 60 + (endM || 0);
 
         // Get appointments for this doctor & date
         const dayApts = cachedAppointments.filter(
@@ -3111,55 +3111,58 @@
         );
 
         let html = '';
-        for (let h = 9; h < 23; h++) {
-          const hourLabel = `${h.toString().padStart(2, '0')}:00`;
-          const isClinicOpen = h >= startHour && h < endHour;
+        for (let m = startMin; m < endMin; m += duration) {
+          const slotH = Math.floor(m / 60);
+          const slotM = m % 60;
+          const slotTimeStr = `${slotH.toString().padStart(2, '0')}:${slotM.toString().padStart(2, '0')}`;
+          const nextM = m + duration;
+          const endSlotStr = `${Math.floor(nextM / 60).toString().padStart(2, '0')}:${(nextM % 60).toString().padStart(2, '0')}`;
 
-          // Check for appointment matching this hour (e.g. 17:00 or 17:30)
-          const aptsInHour = dayApts.filter((a) =>
-            a.startTime.startsWith(h.toString().padStart(2, '0'))
-          );
+          const matchingApt = dayApts.find((a) => a.startTime === slotTimeStr);
 
-          let slotHtml = '';
-          if (aptsInHour.length > 0) {
-            slotHtml = aptsInHour
-              .map(
-                (a) => `
-              <div class="timeline-slot-block booked" onclick="openAppointmentDetails('${a.id}')" style="cursor: pointer;" title="Click to view appointment details">
-                <div>
-                  <strong>${escapeHtml(a.patientName)}</strong> • ${a.startTime} (${a.durationMinutes}m)
+          if (matchingApt) {
+            // Bhara hua / Booked Slot
+            html += `
+              <div class="timeline-slot-row" style="background: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 8px; margin-bottom: 8px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;">
+                <div class="timeline-time-label" style="font-weight: 700; color: #1e40af; width: 140px;">
+                  ⏰ ${slotTimeStr} - ${endSlotStr}
                 </div>
-                <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px">
-                  ${escapeHtml(a.visitType || 'OPD Checkup')} • Reason: ${escapeHtml(a.reason || 'Consultation')}
+                <div style="flex: 1; display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="openAppointmentDetails('${matchingApt.id}')" title="Click to view patient info & actions">
+                  <div>
+                    <div style="font-weight: 700; font-size: 0.95rem; color: #1e3a8a;">
+                      🔴 ${escapeHtml(matchingApt.patientName)} <span style="font-size: 0.8rem; font-weight: normal; color: #3b82f6;">(📞 ${escapeHtml(matchingApt.patientPhoneMasked || matchingApt.patientPhone || 'Registered Phone')})</span>
+                    </div>
+                    <div style="font-size: 0.78rem; color: #64748b; margin-top: 2px;">
+                      Reason: ${escapeHtml(matchingApt.reason || 'General Consultation')} • Click to view details
+                    </div>
+                  </div>
+                  <span style="background: #dbeafe; color: #1d4ed8; padding: 6px 12px; border-radius: 9999px; font-size: 0.75rem; font-weight: 700;">
+                    Bhara hua / Booked ↗
+                  </span>
                 </div>
-              </div>
-            `
-              )
-              .join('');
-          } else if (isClinicOpen) {
-            slotHtml = `
-              <div class="timeline-slot-block available">
-                <span>🟢 Available Slot (${hourLabel})</span>
-                <span style="font-size: 0.72rem; font-weight: 600">Open for Booking</span>
               </div>
             `;
           } else {
-            slotHtml = `
-              <div class="timeline-slot-block closed">
-                <span>Clinic Closed / Doctor Off-duty</span>
+            // Khaali / Available Slot
+            html += `
+              <div class="timeline-slot-row" style="background: #f0fdf4; border-left: 4px solid #10b981; border-radius: 8px; margin-bottom: 8px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;">
+                <div class="timeline-time-label" style="font-weight: 600; color: #065f46; width: 140px;">
+                  ⏰ ${slotTimeStr} - ${endSlotStr}
+                </div>
+                <div style="flex: 1; display: flex; justify-content: space-between; align-items: center;">
+                  <div style="color: #047857; font-weight: 600; font-size: 0.88rem;">
+                    🟢 Khaali / Available Slot
+                  </div>
+                  <span style="background: #dcfce7; color: #15803d; padding: 4px 10px; border-radius: 9999px; font-size: 0.72rem; font-weight: 600;">
+                    Open for Booking
+                  </span>
+                </div>
               </div>
             `;
           }
-
-          html += `
-            <div class="timeline-slot-row">
-              <div class="timeline-time-label">${hourLabel}</div>
-              <div>${slotHtml}</div>
-            </div>
-          `;
         }
 
-        grid.innerHTML = html;
+        grid.innerHTML = html || '<div style="padding: 24px; text-align: center; color: var(--text-muted);">No working hours configured for this day.</div>';
       }
 
       // Render Callbacks List

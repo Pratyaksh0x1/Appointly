@@ -1,0 +1,883 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Appointly — Live Clinic Voice Call</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg-gradient: radial-gradient(circle at 50% 20%, #1e1b4b 0%, #0f172a 100%);
+        --phone-bg: #0b0f19;
+        --phone-border: #1e293b;
+        --accent: #8b5cf6;
+        --accent-glow: rgba(139, 92, 246, 0.4);
+        --success: #10b981;
+        --danger: #ef4444;
+        --text: #f8fafc;
+        --text-muted: #94a3b8;
+        --glass-bg: rgba(255, 255, 255, 0.04);
+        --glass-border: rgba(255, 255, 255, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+        background: var(--bg-gradient);
+        color: var(--text);
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .top-nav {
+        width: 100%;
+        max-width: 440px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 14px;
+      }
+
+      .btn-nav {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        color: var(--text-muted);
+        padding: 6px 12px;
+        border-radius: 9999px;
+        font-size: 0.8rem;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s ease;
+      }
+
+      .btn-nav:hover {
+        color: #fff;
+        background: rgba(255, 255, 255, 0.08);
+        border-color: rgba(255, 255, 255, 0.2);
+      }
+
+      .ai-badge {
+        font-size: 0.72rem;
+        background: rgba(139, 92, 246, 0.2);
+        border: 1px solid rgba(139, 92, 246, 0.4);
+        color: #c4b5fd;
+        padding: 4px 10px;
+        border-radius: 9999px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .ai-pulse-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #10b981;
+        box-shadow: 0 0 8px #10b981;
+      }
+
+      /* Smartphone Frame */
+      .phone-frame {
+        width: 100%;
+        max-width: 420px;
+        height: 780px;
+        max-height: 92vh;
+        background: var(--phone-bg);
+        border: 2px solid var(--phone-border);
+        border-radius: 44px;
+        box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7), 0 0 40px rgba(139, 92, 246, 0.15);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        position: relative;
+      }
+
+      /* Phone Dynamic Island / Speaker */
+      .phone-notch {
+        width: 120px;
+        height: 24px;
+        background: #000;
+        border-radius: 0 0 16px 16px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        z-index: 10;
+      }
+
+      .camera-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #1e293b;
+      }
+
+      .speaker-slot {
+        width: 40px;
+        height: 4px;
+        border-radius: 2px;
+        background: #1e293b;
+      }
+
+      /* Call Screen Header */
+      .call-header {
+        padding: 20px 24px 10px;
+        text-align: center;
+        position: relative;
+      }
+
+      .clinic-name {
+        font-size: 1.25rem;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+        color: #ffffff;
+      }
+
+      .doctor-subtitle {
+        font-size: 0.85rem;
+        color: #a78bfa;
+        margin-top: 2px;
+      }
+
+      .call-status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 10px;
+        padding: 4px 14px;
+        border-radius: 9999px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: var(--text-muted);
+      }
+
+      .call-status-pill.active {
+        background: rgba(16, 185, 129, 0.15);
+        border-color: rgba(16, 185, 129, 0.3);
+        color: #6ee7b7;
+      }
+
+      /* Avatar & Soundwaves */
+      .avatar-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 16px 20px;
+        position: relative;
+      }
+
+      .avatar-ripple-box {
+        position: relative;
+        width: 110px;
+        height: 110px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .avatar-ripple {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        border: 2px solid var(--accent);
+        opacity: 0;
+        transform: scale(0.9);
+      }
+
+      .calling .avatar-ripple {
+        animation: ripple 2s infinite cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+
+      @keyframes ripple {
+        0% {
+          transform: scale(0.9);
+          opacity: 0.8;
+        }
+        100% {
+          transform: scale(1.6);
+          opacity: 0;
+        }
+      }
+
+      .avatar-circle {
+        width: 88px;
+        height: 88px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+        border: 3px solid rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.4rem;
+        box-shadow: 0 10px 25px -5px rgba(124, 58, 237, 0.5);
+        z-index: 2;
+        transition: transform 0.3s ease;
+      }
+
+      .avatar-circle.talking {
+        transform: scale(1.06);
+        box-shadow: 0 0 35px rgba(139, 92, 246, 0.8);
+      }
+
+      /* Waveform visualizer */
+      .waveform-bar-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        height: 36px;
+        margin-top: 10px;
+      }
+
+      .waveform-bar {
+        width: 4px;
+        height: 8px;
+        background: #6366f1;
+        border-radius: 2px;
+        transition: height 0.1s ease;
+      }
+
+      .waveform-bar.active {
+        animation: waveAnim 0.8s ease-in-out infinite alternate;
+      }
+
+      @keyframes waveAnim {
+        0% { height: 6px; background: #6366f1; }
+        50% { height: 28px; background: #a855f7; }
+        100% { height: 12px; background: #38bdf8; }
+      }
+
+      /* Live Captions / Transcript Chat Box */
+      .transcript-container {
+        flex: 1;
+        margin: 0 16px 12px;
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid var(--glass-border);
+        border-radius: 20px;
+        padding: 14px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        scroll-behavior: smooth;
+      }
+
+      .bubble {
+        max-width: 86%;
+        padding: 10px 14px;
+        border-radius: 16px;
+        font-size: 0.84rem;
+        line-height: 1.45;
+        animation: fadeIn 0.25s ease forwards;
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(6px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      .bubble.agent {
+        align-self: flex-start;
+        background: rgba(124, 58, 237, 0.25);
+        border: 1px solid rgba(139, 92, 246, 0.35);
+        color: #f1f5f9;
+        border-bottom-left-radius: 4px;
+      }
+
+      .bubble.user {
+        align-self: flex-end;
+        background: #2563eb;
+        color: #ffffff;
+        border-bottom-right-radius: 4px;
+      }
+
+      .bubble.system-alert {
+        align-self: center;
+        background: rgba(239, 68, 68, 0.2);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        color: #fca5a5;
+        font-size: 0.78rem;
+        text-align: center;
+      }
+
+      .bubble.booked-success {
+        align-self: center;
+        background: rgba(16, 185, 129, 0.2);
+        border: 1px solid rgba(16, 185, 129, 0.4);
+        color: #86efac;
+        font-size: 0.78rem;
+        text-align: center;
+        font-weight: 600;
+      }
+
+      /* Quick Suggested Prompts */
+      .quick-chips-container {
+        padding: 0 16px 10px;
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        white-space: nowrap;
+        scrollbar-width: none;
+      }
+
+      .quick-chips-container::-webkit-scrollbar {
+        display: none;
+      }
+
+      .chip-btn {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        color: #cbd5e1;
+        padding: 6px 12px;
+        border-radius: 9999px;
+        font-size: 0.74rem;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .chip-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.25);
+        color: #fff;
+      }
+
+      /* Manual Text Input Bar */
+      .input-bar {
+        padding: 0 16px 12px;
+        display: flex;
+        gap: 8px;
+      }
+
+      .text-field {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--glass-border);
+        border-radius: 9999px;
+        padding: 8px 16px;
+        color: #fff;
+        font-size: 0.85rem;
+        font-family: inherit;
+        outline: none;
+      }
+
+      .text-field:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent-glow);
+      }
+
+      .btn-send {
+        background: var(--accent);
+        border: none;
+        color: #fff;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+
+      /* Call Controls Footer */
+      .call-controls {
+        background: rgba(11, 15, 25, 0.9);
+        border-top: 1px solid var(--phone-border);
+        padding: 16px 24px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+      }
+
+      .control-btn {
+        width: 54px;
+        height: 54px;
+        border-radius: 50%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        color: #fff;
+        position: relative;
+      }
+
+      .control-btn.btn-mic {
+        background: #1e293b;
+        font-size: 1.3rem;
+      }
+
+      .control-btn.btn-mic.recording {
+        background: #dc2626;
+        box-shadow: 0 0 20px rgba(220, 38, 38, 0.7);
+        animation: pulseMic 1.2s infinite;
+      }
+
+      @keyframes pulseMic {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+      }
+
+      .control-btn.btn-dial {
+        background: #10b981;
+        width: 66px;
+        height: 66px;
+        font-size: 1.6rem;
+        box-shadow: 0 8px 25px -4px rgba(16, 185, 129, 0.5);
+      }
+
+      .control-btn.btn-hangup {
+        background: #ef4444;
+        width: 66px;
+        height: 66px;
+        font-size: 1.6rem;
+        box-shadow: 0 8px 25px -4px rgba(239, 68, 68, 0.5);
+      }
+
+      .control-btn:hover {
+        transform: translateY(-2px);
+      }
+
+      .control-btn:active {
+        transform: translateY(1px);
+      }
+
+      .btn-label {
+        font-size: 0.65rem;
+        color: var(--text-muted);
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Top Bar Navigation -->
+    <div class="top-nav">
+      <a href="/" class="btn-nav" target="_blank" title="Open Doctor Dashboard in new tab">
+        <span>👨‍⚕️</span> Doctor Dashboard ↗
+      </a>
+      <div class="ai-badge">
+        <span class="ai-pulse-dot"></span>
+        <span id="aiModelBadge">Gemini 2.5 Live</span>
+      </div>
+    </div>
+
+    <!-- Realistic Mobile Call Device -->
+    <div class="phone-frame" id="phoneContainer">
+      <!-- Notch / Dynamic Island -->
+      <div class="phone-notch">
+        <div class="speaker-slot"></div>
+        <div class="camera-dot"></div>
+      </div>
+
+      <!-- Call Header -->
+      <div class="call-header">
+        <div class="clinic-name" id="clinicNameDisplay">Arogya Medical Clinic</div>
+        <div class="doctor-subtitle" id="doctorSubtitleDisplay">AI Receptionist • Dr. Ramesh Sharma</div>
+        <div class="call-status-pill" id="callStatusPill">
+          <span>⚪</span>
+          <span id="callStatusText">Ready to Dial</span>
+        </div>
+      </div>
+
+      <!-- Avatar & Sound Waves -->
+      <div class="avatar-container" id="avatarArea">
+        <div class="avatar-ripple-box">
+          <div class="avatar-ripple"></div>
+          <div class="avatar-circle" id="avatarCircle">👩‍⚕️</div>
+        </div>
+
+        <div class="waveform-bar-container" id="waveformContainer">
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+          <div class="waveform-bar"></div>
+        </div>
+      </div>
+
+      <!-- Live Captions & Conversation Stream -->
+      <div class="transcript-container" id="transcriptBox">
+        <div class="bubble agent">
+          Namaste! <strong>Arogya Clinic</strong> mein aapka swagat hai. Main AI receptionist bol rahi hoon. Niche green call button daba kar baat shuru karein.
+        </div>
+      </div>
+
+      <!-- Quick Dialogue Scenario Chips -->
+      <div class="quick-chips-container">
+        <button class="chip-btn" onclick="sendQuickPrompt('Mujhe kal subah Dr. Sharma ke paas appointment book karna hai.')">
+          📅 Book Kal Subah
+        </button>
+        <button class="chip-btn" onclick="sendQuickPrompt('Doctor ki OPD timing aur consultation fee kya hai?')">
+          ⏰ Timing &amp; Fee
+        </button>
+        <button class="chip-btn" onclick="sendQuickPrompt('Mera seene me bohot tez dard ho raha hai, saas lene me takleef hai.')">
+          🚨 Emergency
+        </button>
+        <button class="chip-btn" onclick="sendQuickPrompt('Mera phone number 9876543210 hai, appointment cancel kar dijiye.')">
+          ❌ Cancel Slot
+        </button>
+      </div>
+
+      <!-- Manual Input Option -->
+      <div class="input-bar">
+        <input
+          type="text"
+          id="manualTextInput"
+          class="text-field"
+          placeholder="Speak or type Hinglish message..."
+          onkeydown="if(event.key==='Enter') sendManualText()"
+        />
+        <button class="btn-send" onclick="sendManualText()" title="Send Message">➤</button>
+      </div>
+
+      <!-- Call Controls (Dial / Mic / End Call) -->
+      <div class="call-controls">
+        <!-- Mic Button -->
+        <div style="text-align: center">
+          <button class="control-btn btn-mic" id="btnMic" onclick="toggleMicrophone()" title="Toggle Voice Mic">
+            🎙️
+          </button>
+          <div class="btn-label" id="micLabel">Mic Off</div>
+        </div>
+
+        <!-- Main Call Action Button (Dial / Hangup) -->
+        <div style="text-align: center">
+          <button class="control-btn btn-dial" id="btnCallAction" onclick="toggleCall()" title="Start Live Call">
+            📞
+          </button>
+          <div class="btn-label" id="callActionLabel">Call Clinic</div>
+        </div>
+
+        <!-- Speaker Button -->
+        <div style="text-align: center">
+          <button class="control-btn btn-mic" id="btnSpeaker" onclick="toggleSpeaker()" title="Toggle Voice Speaker">
+            🔊
+          </button>
+          <div class="btn-label" id="speakerLabel">Speaker On</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let isCallActive = false;
+      let isRecording = false;
+      let isSpeakerOn = true;
+      let callTimer = null;
+      let callSeconds = 0;
+      let callId = 'call_' + Date.now();
+      let conversationHistory = [];
+      let speechRecognizer = null;
+      let isSpeakingAudio = false;
+
+      // Audio Elements
+      const audioRing = new Audio('https://assets.mixkit.co/active_storage/sfx/1359/1359-preview.mp3');
+      audioRing.loop = true;
+
+      // Initialize on load
+      window.addEventListener('DOMContentLoaded', async () => {
+        initSpeechRecognition();
+        await loadClinicProfile();
+      });
+
+      async function loadClinicProfile() {
+        try {
+          const res = await fetch('/api/clinic/profile');
+          if (res.ok) {
+            const data = await res.json();
+            if (data.profile && data.profile.clinicName) {
+              document.getElementById('clinicNameDisplay').textContent = data.profile.clinicName;
+            }
+            if (data.doctors && data.doctors.length > 0) {
+              const d0 = data.doctors[0];
+              document.getElementById('doctorSubtitleDisplay').textContent = `AI Receptionist • ${d0.name} (${d0.specialty})`;
+            }
+          }
+        } catch (e) {
+          console.warn('Could not load clinic profile:', e);
+        }
+      }
+
+      function initSpeechRecognition() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          console.warn('Browser does not support Web Speech API');
+          return;
+        }
+
+        speechRecognizer = new SpeechRecognition();
+        speechRecognizer.lang = 'hi-IN';
+        speechRecognizer.continuous = true;
+        speechRecognizer.interimResults = false;
+
+        speechRecognizer.onresult = (event) => {
+          const lastIdx = event.results.length - 1;
+          const transcript = event.results[lastIdx][0].transcript.trim();
+          if (transcript) {
+            handleUserTurn(transcript);
+          }
+        };
+
+        speechRecognizer.onerror = (event) => {
+          console.warn('Speech recognition error:', event.error);
+        };
+
+        speechRecognizer.onend = () => {
+          if (isCallActive && isRecording) {
+            try { speechRecognizer.start(); } catch (e) {}
+          }
+        };
+      }
+
+      function toggleCall() {
+        if (!isCallActive) {
+          startCall();
+        } else {
+          endCall();
+        }
+      }
+
+      async function startCall() {
+        isCallActive = true;
+        callSeconds = 0;
+        callId = 'call_' + Date.now();
+        conversationHistory = [];
+
+        // UI Updates
+        document.getElementById('phoneContainer').classList.add('calling');
+        const pill = document.getElementById('callStatusPill');
+        pill.className = 'call-status-pill active';
+        document.getElementById('callStatusText').textContent = 'Connecting...';
+
+        const actionBtn = document.getElementById('btnCallAction');
+        actionBtn.className = 'control-btn btn-hangup';
+        actionBtn.innerHTML = '📴';
+        document.getElementById('callActionLabel').textContent = 'End Call';
+
+        // Play phone connect ring briefly
+        try { audioRing.play(); } catch(e){}
+
+        setTimeout(() => {
+          try { audioRing.pause(); audioRing.currentTime = 0; } catch(e){}
+          document.getElementById('callStatusText').textContent = 'Connected • 00:00';
+          startCallTimer();
+
+          // Start Microphone automatically for seamless live conversation
+          startMicrophone();
+
+          // AI Initial Greeting
+          const clinicName = document.getElementById('clinicNameDisplay').textContent;
+          const greeting = `Namaste! ${clinicName} mein aapka swagat hai. Main AI receptionist bol rahi hoon. Aaj main aapki kya sahayata kar sakti hoon?`;
+          appendBubble('agent', greeting);
+          speakText(greeting);
+        }, 1200);
+      }
+
+      function endCall() {
+        isCallActive = false;
+        clearInterval(callTimer);
+        stopMicrophone();
+        window.speechSynthesis.cancel();
+        try { audioRing.pause(); audioRing.currentTime = 0; } catch(e){}
+
+        document.getElementById('phoneContainer').classList.remove('calling');
+        const pill = document.getElementById('callStatusPill');
+        pill.className = 'call-status-pill';
+        document.getElementById('callStatusText').textContent = `Call Ended • ${formatTime(callSeconds)}`;
+
+        const actionBtn = document.getElementById('btnCallAction');
+        actionBtn.className = 'control-btn btn-dial';
+        actionBtn.innerHTML = '📞';
+        document.getElementById('callActionLabel').textContent = 'Call Clinic';
+
+        appendBubble('system-alert', `📴 Call completed (${formatTime(callSeconds)}). Summary saved to clinic records.`);
+      }
+
+      function startCallTimer() {
+        callTimer = setInterval(() => {
+          callSeconds++;
+          document.getElementById('callStatusText').textContent = `Connected • ${formatTime(callSeconds)}`;
+        }, 1000);
+      }
+
+      function formatTime(sec) {
+        const m = Math.floor(sec / 60).toString().padStart(2, '0');
+        const s = (sec % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+      }
+
+      function toggleMicrophone() {
+        if (!isRecording) {
+          startMicrophone();
+        } else {
+          stopMicrophone();
+        }
+      }
+
+      function startMicrophone() {
+        if (!speechRecognizer) return;
+        try {
+          speechRecognizer.start();
+          isRecording = true;
+          document.getElementById('btnMic').classList.add('recording');
+          document.getElementById('micLabel').textContent = 'Listening...';
+        } catch (e) {
+          console.warn('Could not start mic:', e);
+        }
+      }
+
+      function stopMicrophone() {
+        if (!speechRecognizer) return;
+        try {
+          speechRecognizer.stop();
+          isRecording = false;
+          document.getElementById('btnMic').classList.remove('recording');
+          document.getElementById('micLabel').textContent = 'Mic Off';
+        } catch (e) {}
+      }
+
+      function toggleSpeaker() {
+        isSpeakerOn = !isSpeakerOn;
+        document.getElementById('speakerLabel').textContent = isSpeakerOn ? 'Speaker On' : 'Muted';
+        if (!isSpeakerOn) window.speechSynthesis.cancel();
+      }
+
+      async function handleUserTurn(text) {
+        if (!text || text.trim().length === 0) return;
+        appendBubble('user', text);
+        animateWaveform(true);
+
+        try {
+          const res = await fetch('/api/call/turn', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userText: text,
+              callId,
+              history: conversationHistory,
+            }),
+          });
+
+          const data = await res.json();
+          animateWaveform(false);
+
+          if (data.replyText) {
+            appendBubble('agent', data.replyText);
+            speakText(data.replyText);
+
+            conversationHistory.push({ role: 'user', parts: text });
+            conversationHistory.push({ role: 'model', parts: data.replyText });
+
+            if (data.actionTaken === 'booked') {
+              appendBubble('booked-success', '✅ Appointment Confirmed & Saved to Doctor Dashboard!');
+            } else if (data.actionTaken === 'emergency') {
+              appendBubble('system-alert', '🚨 Emergency Escalation Dispatched to Doctor Dashboard!');
+            }
+          }
+        } catch (err) {
+          console.error('Call turn error:', err);
+          animateWaveform(false);
+          const fallback = 'Kripya ek baar dobara kahiye, main sun nahi paayi.';
+          appendBubble('agent', fallback);
+          speakText(fallback);
+        }
+      }
+
+      function sendManualText() {
+        const input = document.getElementById('manualTextInput');
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = '';
+        if (!isCallActive) startCall();
+        handleUserTurn(text);
+      }
+
+      function sendQuickPrompt(promptText) {
+        if (!isCallActive) startCall();
+        handleUserTurn(promptText);
+      }
+
+      function appendBubble(type, text) {
+        const box = document.getElementById('transcriptBox');
+        const bubble = document.createElement('div');
+        bubble.className = `bubble ${type}`;
+        bubble.innerHTML = escapeHtml(text);
+        box.appendChild(bubble);
+        box.scrollTop = box.scrollHeight;
+      }
+
+      function speakText(text) {
+        if (!isSpeakerOn) return;
+        if (!window.speechSynthesis) return;
+
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+
+        // Try to pick natural Hindi or Indian English voice
+        const voices = window.speechSynthesis.getVoices();
+        const indicVoice = voices.find(
+          (v) => v.lang.includes('hi') || v.lang.includes('IN') || v.name.includes('India')
+        );
+        if (indicVoice) utterance.voice = indicVoice;
+
+        utterance.onstart = () => {
+          document.getElementById('avatarCircle').classList.add('talking');
+          animateWaveform(true);
+        };
+        utterance.onend = () => {
+          document.getElementById('avatarCircle').classList.remove('talking');
+          animateWaveform(false);
+        };
+
+        window.speechSynthesis.speak(utterance);
+      }
+
+      function animateWaveform(active) {
+        const bars = document.querySelectorAll('.waveform-bar');
+        bars.forEach((bar) => {
+          if (active) {
+            bar.classList.add('active');
+          } else {
+            bar.classList.remove('active');
+          }
+        });
+      }
+
+      function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+      }
+    </script>
+  </body>
+</html>

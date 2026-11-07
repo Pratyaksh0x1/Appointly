@@ -38,6 +38,7 @@ import {
   stopTranscriptRetentionWorker,
 } from './services/transcript-retention.js';
 import { globalMetrics } from './observability/metrics.js';
+import { processLiveVoiceTurn, isGeminiConfigured } from './services/gemini-service.js';
 import { globalAlertEngine } from './observability/alerts.js';
 import { AppointlyEvents } from './observability/events.js';
 import { Doctor } from './types/index.js';
@@ -720,13 +721,20 @@ export function createServer() {
         return;
       }
 
-      // 8d. Realtime Voice Pipeline Test Page
-      if (req.method === 'GET' && (pathname === '/voice-test' || pathname === '/voice-test.html')) {
+      // 8d. Realtime Voice Pipeline & Live Patient Call Page
+      if (
+        req.method === 'GET' &&
+        (pathname === '/call' ||
+          pathname === '/call.html' ||
+          pathname === '/voice' ||
+          pathname === '/voice-test' ||
+          pathname === '/voice-test.html')
+      ) {
         const htmlPath = findStaticFile([
+          'apps/dashboard/public/live-call.html',
+          'public/live-call.html',
           'apps/dashboard/public/voice-test.html',
           'public/voice-test.html',
-          'dashboard/public/voice-test.html',
-          'voice-test.html',
         ]);
         if (htmlPath) {
           const html = fs.readFileSync(htmlPath, 'utf8');
@@ -734,6 +742,39 @@ export function createServer() {
           res.end(html);
           return;
         }
+      }
+
+      // 8e. Gemini Live Voice Call Turn Endpoint
+      if (req.method === 'POST' && (pathname === '/api/call/turn' || pathname === '/api/voice/turn')) {
+        const bodyRes = await readAndSanitizeJsonBody(req, res);
+        if (!bodyRes.success) return;
+        try {
+          const { userText, callId, history } = bodyRes.data || {};
+          const turnResult = await processLiveVoiceTurn({
+            userText: userText || '',
+            callId: callId || `call_${Date.now()}`,
+            history: history || [],
+          });
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(turnResult));
+        } catch (err: any) {
+          rootLogger.error('Error in live call turn:', err);
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
+        return;
+      }
+
+      // 8f. Gemini AI Status Probe
+      if (req.method === 'GET' && pathname === '/api/config/gemini') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            configured: isGeminiConfigured(),
+            model: 'gemini-2.5-flash',
+          })
+        );
+        return;
       }
 
       // 9. Server-Sent Events (SSE) for live Doctor Dashboard (Protected: requires doctor auth)
