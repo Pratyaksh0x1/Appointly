@@ -1,0 +1,90 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+# CodeRabbit Configuration for Appointly
+# Autonomous AI Voice Agent for Clinic OPD Appointments
+
+language: 'en-US'
+early_access: false
+tone_instructions: >-
+  Be concise, direct, professional, and focus heavily on concurrency safety,
+  medical non-diagnosis rules, prompt injection defense, and PII masking.
+
+reviews:
+  profile: 'assertive'
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - 'main'
+      - 'master'
+
+  path_filters:
+    - '!node_modules/**'
+    - '!dist/**'
+    - '!coverage/**'
+    - '!package-lock.json'
+    - '!docs/eval-report.md'
+
+  path_instructions:
+    - path: 'apps/api/src/safety/**'
+      instructions: >-
+        Enforce strict emergency escalation rules (chest pain, saans lene me dikkat,
+        unconsciousness, heavy bleeding -> 108 emergency). Non-diagnostic rule: never
+        diagnose illnesses or recommend prescription medications. Verify prompt injection
+        defenses sanitize untrusted patient speech.
+
+    - path: 'apps/api/src/services/booking-service.ts'
+      instructions: >-
+        Enforce zero double-booking guarantees: unique constraint on (doctor_id, slot_start),
+        transactional isolation, row-level locking (FOR UPDATE), idempotency keys, and
+        2-minute auto-expiring slot holds. Times must be stored in UTC and displayed in Asia/Kolkata.
+
+    - path: 'apps/api/src/logger/**'
+      instructions: >-
+        Ensure patient phone numbers, names, and all API keys/credentials are strictly
+        masked/redacted before printing or serialization. Secrets must never appear in logs.
+
+    - path: 'apps/api/src/agent/**'
+      instructions: >-
+        Verify state machine transitions (GREETING_CONSENT -> UNDERSTAND_INTENT ->
+        COLLECT_DETAILS -> OFFER_SLOTS -> CONFIRM_READBACK -> BOOKED/RESCHEDULE/CANCEL/ESCALATE/FALLBACK).
+        The LLM must never write to DB directly; only call validated Zod tools. Never offer
+        more than 2 slots at a time on voice.
+
+    - path: 'apps/api/src/observability/**'
+      instructions: >-
+        Check Prometheus metrics exposition compliance (v0.0.4 format), consistent event
+        names in AppointlyEvents, correlation IDs (call_id, request_id), and alert thresholds.
+
+    - path: 'apps/api/src/voice/**'
+      instructions: >-
+        Verify WebSocket audio streaming, barge-in support, filler phrases under high latency
+        (>700ms), and proper session cleanup without memory leaks.
+
+    - path: 'apps/dashboard/**'
+      instructions: >-
+        Verify server-side JWT authentication on all API routes, real-time SSE/WebSocket
+        event listener handling, accessibility, and responsive mobile-first UI.
+
+  tools:
+    gitleaks:
+      enabled: true
+    ast-grep:
+      enabled: true
+    eslint:
+      enabled: true
+    shellcheck:
+      enabled: true
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
