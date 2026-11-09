@@ -2,7 +2,7 @@
 ### AI-Powered Voice Receptionist & Smart Appointment Management for Clinics
 
 <p align="center">
-  An empathetic, multilingual Voice AI assistant that helps small clinics automate appointment booking, patient communication, and doctor scheduling through natural Hinglish conversations.
+An empathetic, multilingual Voice AI assistant that helps small clinics automate appointment booking, patient communication, and doctor scheduling through natural Hinglish conversations.
 </p>
 
 <p align="center">
@@ -13,7 +13,6 @@
   ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
   ![License](https://img.shields.io/badge/License-MIT-green.svg)
 </p>
-
 ---
 
 ## 📌 Overview
