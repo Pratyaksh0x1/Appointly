@@ -1,315 +1,454 @@
 # Appointly 🏥🎙️
+### AI-Powered Voice Receptionist & Smart Appointment Management for Clinics
 
-> **Hinglish Live Voice AI Agent for Small Clinics**  
-> _Built for the Gnani AI Hackathon • Backed by Neon Serverless PostgreSQL_
+<p align="center">
+  An empathetic, multilingual Voice AI assistant that helps small clinics automate appointment booking, patient communication, and doctor scheduling through natural Hinglish conversations.
+</p>
 
-![Appointly Logo](apps/dashboard/public/logo.jpg)
-
-Appointly is an empathetic, multilingual voice assistant designed for small clinic reception desks in India. A patient speaks live in Hinglish (Hindi + English code-switching); Appointly confirms doctor availability, books the appointment via strict serializable database transactions on Neon PostgreSQL, confirms the doctor, date, start time, and duration, and instantly displays the booking on a real-time doctor dashboard via Server-Sent Events (SSE).
-
----
-
-## Phase 9: Observability, Prometheus Metrics, Real-Time Alerts & Eval Harness Highlights
-
-- **Standardized Structured Event Catalog (`AppointlyEvents`)**:
-  - Consistent structured events across voice turns, tool invocations, database commits, safety guardrails, and retention jobs.
-  - Guaranteed `call_id` / `request_id` correlation with automated PII masking (phones, emails, Aadhaar, credentials).
-- **Prometheus Metrics Exposition (`GET /metrics`)**:
-  - Standard Prometheus format (v0.0.4) exposing counters (`appointly_calls_total`, `appointly_bookings_total`, `appointly_emergencies_total`, `appointly_credits_burned_total`), gauges, and latency summaries (`appointly_turn_latency_ms{quantile="0.5|0.9|0.95|0.99"}`).
-  - Supports `GET /metrics?format=json` or `Accept: application/json` for programmatic telemetry consumption.
-- **Doctor Dashboard Observability & SLO Panel**:
-  - Direct UI visualization of production health: Availability SLO (99.9% target vs actual) and P95 Turn Latency SLO (< 2,000ms target vs actual).
-  - Per-stage latency percentiles table (STT, LLM First Token, TTS First Audio, Turn Total) and booking funnel conversion stats.
-- **Real-Time Alert Engine (`AlertEngine`)**:
-  - Automated detection of high error rates (> 5%), P95 turn latency breaches (> 2,000ms), and credit depletion (&ge; 90%).
-  - Logs structured alert warnings and dispatches asynchronous HTTP POST webhooks (`ALERT_WEBHOOK_URL`).
-- **Documented Service Level Objectives ([`docs/slo.md`](docs/slo.md))**:
-  - Formal 99.9% Availability and P95 turn latency under 2.0s SLOs.
-  - Honest disclosure of Neon Serverless PostgreSQL cold starts (~500ms–1.5s after 5 min idle) and our 0ms pre-cached memory audio mitigation.
-- **Comprehensive Conversational Eval Harness (`npm run eval`)**:
-  - 57 diverse Hinglish clinical scenarios across 9 categories (Direct Bookings, Slot Preference, Unavailable Slots, Reschedule, Cancel, Ambiguous Times, Medical Emergencies, Prompt Injections, Off-Topic).
-  - Strict acceptance guarantees verified in CI: **100% Emergency Triage pass rate** and **Zero Unavailable Slot Bookings**.
-  - Markdown report automatically generated at [`docs/eval-report.md`](docs/eval-report.md).
+<p align="center">
+  ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
+  ![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat&logo=nodedotjs&logoColor=white)
+  ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
+  ![Neon](https://img.shields.io/badge/Neon-00E599?style=flat&logo=neon&logoColor=black)
+  ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white)
+  ![License](https://img.shields.io/badge/License-MIT-green.svg)
+</p>
 
 ---
 
-## Phase 8: Reliability, Security Hardening & Chaos Testing Highlights
+## 📌 Overview
 
-- **Idempotency Keys on All Mutating Endpoints**:
-  - Mutating routes (`POST /api/chat`, `PUT /api/appointments/:id/reschedule`, `PUT /api/appointments/:id/cancel`) support `Idempotency-Key` and `X-Idempotency-Key` headers.
-  - Replays cached responses with `X-Cache-Lookup: HIT` and `X-Idempotency-Replay: true`, returning HTTP 409 Conflict for in-flight duplicates and bypassing re-execution of side effects.
-- **Transactional Outbox with Retry & Dead-Letter Status**:
-  - The `outbox` table tracks `retry_count`, `max_retries` (default 3), and `last_error`.
-  - Concurrently polled with PostgreSQL `FOR UPDATE SKIP LOCKED`. If an event exceeds maximum retries, it transitions safely to `'DEAD_LETTER'` without blocking the relay queue.
-- **Sliding-Window Rate Limiting (Per-IP & Per-Session)**:
-  - Enforces configurable rate limits (`RATE_LIMIT_MAX_PER_MINUTE`, default 120 req/min) per client IP and per session/doctor Bearer token.
-  - Returns HTTP 429 (`TOO_MANY_REQUESTS`) with standard `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `Retry-After` headers.
-- **Request Body Size Limits & Deep Input Sanitization**:
-  - Enforces `MAX_REQUEST_SIZE_BYTES` (1MB default), destroying oversized streams with HTTP 413 (`PAYLOAD_TOO_LARGE`).
-  - Defense-in-depth sanitization: strips null bytes (`\0`), ASCII control characters, and object prototype properties (`__proto__`, `constructor`, `prototype`).
-- **Enterprise Security Headers & Dynamic CORS Allowlist**:
-  - Strict enterprise headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`, `Strict-Transport-Security: max-age=31536000`, `Content-Security-Policy`, and `Permissions-Policy`.
-  - Dynamic allowlist origin checking via `CORS_ORIGIN` with `Vary: Origin`.
-- **Least-Privilege Database Roles Architecture**:
-  - Dual-role database security separating migration DDL (`appointly_admin`) from application runtime DML (`appointly_app` with `SELECT`, `INSERT`, `UPDATE`, `DELETE` only, no `DROP`/`ALTER`/`TRUNCATE`). Documented in [`docs/db-roles.md`](docs/db-roles.md) and [`scripts/setup-least-privilege-db-roles.sql`](scripts/setup-least-privilege-db-roles.sql).
-- **Automated PII & Secret Redaction in Logs & Transcripts**:
-  - Automatically masks phone numbers (`+91 ******<last4>`), 12-digit Aadhaar IDs (`****-****-****`), email addresses (`u***r@domain.com`), and Bearer tokens (`Bearer [REDACTED]`).
-  - Zero raw PII or credentials printed in application logs or stored call summaries.
-- **DPDP-Compliant Transcript Retention Worker**:
-  - Configurable retention job (`TRANSCRIPT_RETENTION_DAYS`, default 30 days) automatically purges call records older than the retention threshold.
-- **Zero Raw Audio Storage Policy**:
-  - Microphone audio chunks are processed strictly in RAM buffers for VAD and STT streaming, then immediately garbage collected. Zero raw audio files (`.wav`, `.pcm`, `.raw`) touch disk (`STORE_RAW_AUDIO=false`).
-- **Graceful Degradation Protocols**:
-  - _Voice Agent_: If STT, LLM, or TTS fail or time out, the server plays a pre-cached Hinglish apology audio chunk (`FIXED_PHRASES.FALLBACK`), persists a `callback_request` in Neon PostgreSQL, and tears down the call cleanly.
-  - _Doctor Dashboard_: If SSE connection drops, the UI automatically engages a 5-second polling fallback with badge indicator `"Polling Active (Fallback)"`, restoring `"Neon Postgres Live"` upon reconnect.
-- **Comprehensive STRIDE-Lite Threat Model**:
-  - Detailed in [`docs/threat-model.md`](docs/threat-model.md) analyzing Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, and Elevation of Privilege with honest mitigations and residual risks.
-- **50 Concurrent Calls Load Test & Chaos Test Suite**:
-  - Benchmark report in [`docs/load-test.md`](docs/load-test.md): 50 concurrent calls, 150 conversational turns completed in 7.33s with 7.2 calls/sec throughput and **0% error rate**.
-  - All automated chaos tests pass in `apps/api/tests/chaos-and-resilience.test.ts`.
+**Appointly** is an AI-powered voice receptionist designed specifically for small and independent clinics in India.
+
+Traditional appointment booking often requires patients to call clinics, wait for receptionists, understand doctor availability, and manually coordinate their appointments.
+
+Appointly simplifies this entire process using a real-time conversational AI agent.
+
+Patients can speak naturally in Hindi, English, or Hinglish (Hindi-English code-switching). The AI assistant understands their requirements, checks doctor availability, offers suitable appointment slots, and securely books appointments.
+
+Once an appointment is confirmed, the doctor dashboard receives an instant update without requiring a page refresh.
+
+Unlike a simple chatbot, Appointly combines conversational AI with deterministic scheduling logic, transactional database operations, real-time communication, and safety guardrails.
+
+**Built for the Gnani AI Hackathon.**
+
+## ✨ Key Features
+
+### 🎙️ 1. Real-Time Hinglish Voice AI
+
+- Natural voice conversations in Hindi, English, and Hinglish.
+- Live speech-to-text using Gnani Prisma STT.
+- Natural speech generation using Gnani Timbre TTS.
+- Conversational reasoning powered by Evon 30B.
+- Real-time, bidirectional audio streaming over WebSockets.
+- Sentence-level audio streaming for faster responses.
+- Voice Activity Detection (VAD) for detecting speech and silence.
+- Barge-in support: patients can interrupt the AI while it is speaking.
+- Pre-generated audio responses for greetings, fillers, emergency escalations, and fallback messages.
+
+### 📅 2. Intelligent Appointment Booking
+
+Patients can book appointments through natural conversations.
+
+Example:
+
+> Patient: Mujhe kal shaam ko doctor se appointment chahiye.
+>
+> Appointly: Ji bilkul! Kal shaam ke liye available slots check karti hoon. Aap 5:30 PM ya 6:00 PM mein se kaunsa prefer karenge?
+>
+> Patient: 6 baje.
+>
+> Appointly: Aapki appointment 6:00 PM ke liye confirm ho gayi hai.
+
+Features include:
+
+- Real-time doctor availability checking.
+- Automatic appointment slot generation.
+- Doctor-specific consultation durations.
+- Dynamic OPD scheduling.
+- Temporary appointment slot holds.
+- Automatic slot release when calls disconnect.
+- Confirmation readback before completing bookings.
+- Maximum two appointment options offered at a time.
+- Automatic receptionist callback requests when booking cannot be completed.
+
+### 🔄 3. Appointment Lifecycle Management
+
+Appointly supports the complete appointment lifecycle:
+
+- Book new appointments.
+- Reschedule existing appointments.
+- Cancel appointments.
+- Mark consultations as completed.
+- Verify patient identity before sensitive appointment operations.
+- Release cancelled appointment slots automatically.
+- Prevent unauthorized access to patient appointment information.
+
+### 👨‍⚕️ 4. Real-Time Doctor Dashboard
+
+Doctors can manage their clinic appointments through a centralized dashboard.
+
+Dashboard capabilities include:
+
+- Today's appointments.
+- Upcoming appointments.
+- Interactive OPD schedule grid.
+- Appointment status tracking.
+- Dynamic doctor working hours.
+- Real-time booking notifications.
+- Emergency and escalation alerts.
+- Receptionist callback request management.
+- AI-generated call summaries.
+- Live API credit consumption.
+- System health and latency monitoring.
+
+**Real-time synchronization:** The dashboard uses Server-Sent Events (SSE) to receive booking updates, cancellations, rescheduling events, and alerts without manual refreshing.
+
+If the SSE connection fails, the dashboard automatically switches to a polling fallback.
+
+### 🚨 5. Emergency Detection & Medical Safety
+
+Patient safety is a core design principle.
+
+Appointly uses deterministic, code-level emergency detection instead of relying exclusively on LLM-generated responses.
+
+The system detects critical symptoms such as:
+
+- Chest pain.
+- Difficulty breathing.
+- Unconsciousness.
+- Other configured emergency indicators.
+
+When a potential emergency is detected:
+
+1. The emergency scanner intercepts the conversation.
+2. The normal booking workflow is bypassed.
+3. The system triggers the configured emergency escalation response.
+4. The patient receives an appropriate emergency instruction, including India's 108 emergency service guidance.
+5. An emergency event is recorded and communicated to the doctor dashboard.
+
+**Important:** Appointly is an appointment-management assistant, not a diagnostic system. It does not provide medical diagnoses or replace professional medical care.
+
+### 🔐 6. Authentication & Security
+
+- HMAC-SHA256 signed JWT authentication.
+- Google OAuth authentication for doctors.
+- Protected doctor dashboard APIs.
+- Short-lived, single-use WebSocket authentication tokens.
+- Server-side API credential management.
+- Dynamic CORS origin allowlisting.
+- Request validation using Zod.
+- Input sanitization.
+- HTTP security headers.
+- Per-IP and per-session rate limiting.
+- Request body size restrictions.
+- Automated masking of sensitive information in logs.
+- Separate database roles for migrations and application runtime.
+
+### ⚡ 7. Reliability & Fault Tolerance
+
+Appointly is designed to handle failures without silently creating incorrect appointments.
+
+- Idempotency keys for mutating API requests.
+- PostgreSQL transactional booking operations.
+- Transactional outbox pattern.
+- Automatic retry and dead-letter handling.
+- Circuit breakers for external AI services.
+- Graceful fallback when STT, LLM, or TTS providers fail.
+- Automatic callback request creation when the AI workflow cannot finish.
+- Automatic cleanup of abandoned appointment slot holds.
+- SSE reconnection with polling fallback.
+
+### 📊 8. Observability & Performance Monitoring
+
+Appointly includes a built-in observability system.
+
+- Prometheus-compatible `/metrics` endpoint.
+- Structured JSON event logging.
+- Request and call correlation IDs.
+- P50, P90, P95, and P99 latency monitoring.
+- STT, LLM, and TTS latency tracking.
+- Booking conversion statistics.
+- API credit consumption monitoring.
+- Automated alerts for high error rates.
+- Latency threshold alerts.
+- Credit budget depletion alerts.
+- Doctor dashboard system health panel.
+
+### 🧪 9. Conversational Evaluation & Testing
+
+Appointly includes a conversational evaluation harness covering scenarios such as:
+
+- Direct appointment booking.
+- Preferred appointment slots.
+- Unavailable appointment slots.
+- Rescheduling.
+- Cancellation.
+- Ambiguous time expressions.
+- Medical emergencies.
+- Prompt injection attempts.
+- Off-topic conversations.
+
+It also includes unit tests, integration tests, concurrency tests, lifecycle tests, and resilience tests.
 
 ---
 
-## Phase 7: Patient Confirmation, Lifecycle & Edge Case Highlights
+## 🏗️ System Architecture
 
-- **Post-Commit Spoken Readback with Clinic Arrival Instructions**:
-  - The voice agent says _"booked"_ strictly **after** database transaction commit (Non-negotiable Rule 1).
-  - Spoken confirmation readback in patient's language mix (Hinglish) states Doctor, Date, Time, Duration, and clinic instructions:
-    _“Kripya clinic samay se 10 minute pehle pahunchein, aur apna purana prescription ya medical records aur identity proof sath layein.”_
-- **Voice Reschedule & Cancel with Caller Verification (Zero PHI Leakage)**:
-  - Callers asking to modify or cancel appointments must verify identity via **Patient Name + Last 4 digits of phone number**.
-  - **Zero PHI Leakage Guarantee**: Unverified callers never receive doctor name, appointment dates, or times (`VERIFICATION_FAILED_NO_PHI`).
-  - Verified callers can reschedule to an open slot or cancel atomically with full slot freeing and outbox broadcast.
-- **Outbound Reminders (24h & 2h before) via Transactional Outbox**:
-  - Driven by the `outbox` table with PostgreSQL `FOR UPDATE SKIP LOCKED` to prevent duplicate dispatching across concurrent workers.
-  - Pluggable provider interface `IReminderProvider` with `SimulatedReminderProvider` generating natural Hinglish IVR speech calls and SMS text scripts.
-- **Doctor Call Summaries with Strict Non-Diagnostic Guarantee (Rule 4)**:
-  - Extracted verbatim from patient speech turns (e.g. _“pet bahut kharab hai aur ulti jaisa lag raha hai”_), explicitly tagged as non-diagnostic notes.
-  - Tagged with structured `CallOutcome` (`BOOKED`, `RESCHEDULED`, `CANCELLED`, `CALLBACK_SAVED`, `EMERGENCY_ESCALATED`, `CALL_DROPPED`, `PATIENT_SILENT_DISCONNECT`).
-  - Displayed in the doctor dashboard under **🩺 AI Call Summaries** with live SSE broadcast.
-- **5 Telephony Edge Cases Handled**:
-  - _Mind-Change Mid-Call_: Automatically releases active slot holds in DB and resets slot selection for the new preference.
-  - _Ambiguous Time Preference_: Vague requests (_“shaam ko”_) are resolved to time windows and strictly offer at most 2 concrete slots.
-  - _No Slots Available_: Scans the next 2 clinic days for open slots or saves a callback request.
-  - _Patient Silence_: Progressive polite prompts on Turn 1 & Turn 2, graceful disconnect on Turn 3.
-  - _Dropped Call Cleanup_: Immediately releases holds on disconnect; zero ghost bookings created.
+Appointly follows a modular monorepo architecture with separate API, dashboard, and shared packages.
 
----
+### High-Level Architecture
 
-## Phase 6: Doctor Dashboard, Auth & Realtime Outbox Highlights
+```mermaid
+flowchart TD
+    A["Patient"] --> B["Live Voice Interface"]
+    B --> C["WebSocket Audio Streaming"]
+    C --> D["Voice Activity Detection"]
+    D --> E["Gnani Prisma STT"]
+    E --> F["Emergency Detection"]
 
-- **Cryptographically Signed HMAC-SHA256 JWT Authentication**:
-  - Protected doctor routes guarded by `requireDoctorAuth` middleware.
-  - Supports Google Auth (`POST /api/auth/google`) and One-Click Doctor Demo Login (`POST /api/auth/dev-login`) for quick offline testing.
-- **Sub-2-Second Live Updates via Dual SSE Outbox Relay**:
-  - Real-time updates for new bookings, reschedules, cancellations, doctor schedule changes, and emergency alerts without manual refresh.
-- **Doctor Dashboard Capabilities**:
-  - Live Today & Upcoming Appointments list with status badges (`CONFIRMED`, `COMPLETED`, `CANCELLED`).
-  - Interactive Day OPD Schedule Grid and time slot distribution.
-  - Emergency / Escalation alert banner with audible warning and 108 protocol instructions.
-  - Reception Callback Requests list with 1-click resolve button.
-  - Live AI Call Summaries viewer with verbatim patient concerns.
-  - Live Credits Used counter against the 5,000 credit cap.
-  - Mobile-responsive design with dark clinical theme and WCAG accessibility standards.
+    F -->|Emergency| G["Emergency Escalation"]
+    F -->|Normal Request| H["Evon 30B LLM"]
 
----
+    H --> I["Conversation State Machine"]
+    I --> J["Validated Tool Calls"]
+    J --> K["Appointment Services"]
 
-- **Authenticated Two-Way WebSocket Pipeline (`/ws/voice`)**:
-  - Browser streams 16kHz PCM audio chunks; server streams back sentence-chunked TTS audio frames and event messages (`session_ready`, `transcript`, `state`, `agent_text`, `filler`, `interrupt`, `latency`).
-  - Authenticated via cryptographically secure, single-use, 10-minute session tokens (`POST /api/voice/session`) with sliding-window IP rate limiting (20 req/min). Non-negotiable security: Gnani/Evon credentials are never sent to the browser.
-- **Local RMS Voice Activity Detection (VAD) & Silence Endpointing**:
-  - Frame-by-frame 16-bit PCM RMS energy evaluation with 250 ms minimum speech threshold to ignore throat clears.
-  - 700 ms silence endpointing window immediately declares end-of-speech and triggers processing without awaiting cloud provider timeouts.
-- **Pre-Generated Zero-Latency Audio Cache**:
-  - Fixed Hinglish utterances (Greetings, 700ms Fillers, Emergency 108 Escalations, Fallbacks, Farewells) are pre-synthesized at server startup.
-  - Delivers **0 ms TTS latency** and sub-50ms first-turn voice response.
-- **Sentence-Chunked Streaming TTS**:
-  - LLM and state machine outputs are split on natural punctuation boundaries (`.`, `!`, `?`, `|`, `\n`).
-  - Sentence 1 is synthesized and streamed to the client immediately while subsequent sentences are processed concurrently, dramatically cutting Time-to-First-Audio.
-- **700 ms Conversational Tool Filler Protocol**:
-  - If a database query or external tool execution exceeds 700 ms, the server dispatches a pre-cached filler audio chunk (_"Ji, main check kar rahi hoon, ek second..."_) to keep the caller engaged and mask latency.
-- **Bi-directional Barge-In (Interruption Handling)**:
-  - If the patient speaks while the agent is talking, VAD detects speech onset, the server cancels active TTS via `AbortController`, and the browser immediately purges its audio queue.
-- **Live Voice Tester & Telemetry UI**:
-  - Available at **[http://localhost:3000/voice-test.html](http://localhost:3000/voice-test.html)** with interactive mic controls, real-time waveform states, live transcripts, and turn-by-turn latency monitoring (`stt_ms`, `llm_first_token_ms`, `tts_first_audio_ms`, `total_ms`).
-- **Comprehensive Benchmark Report**:
-  - Detailed in [`docs/latency.md`](docs/latency.md) reporting P50 (85ms mock / 980ms real) and P95 (550ms mock / 1,420ms real) against the 1.5s SLA and detailing the top 3 telephony bottlenecks.
+    K --> L[("Neon PostgreSQL")]
+    L --> M["Transactional Outbox"]
+    M --> N["SSE Event Relay"]
+    N --> O["Doctor Dashboard"]
 
----
-
-## Phase 4: Conversation Brain & Explicit State Machine Highlights
-
-- **Explicit Finite State Machine (`apps/api/src/agent/orchestrator.ts`)**:
-  - Rigid states: `GREETING_CONSENT` $\rightarrow$ `UNDERSTAND_INTENT` $\rightarrow$ `COLLECT_DETAILS` $\rightarrow$ `OFFER_SLOTS` $\rightarrow$ `CONFIRM_READBACK` $\rightarrow$ `BOOKED` \| `RESCHEDULE` \| `CANCEL` \| `ESCALATE` \| `FALLBACK`.
-  - The LLM selects natural Hinglish wording; the state machine and validated tools strictly control workflow state.
-- **Mandatory Read-Back Verification**:
-  - The agent explicitly reads back doctor name, date, start time, and visit duration queried directly from Neon PostgreSQL before finalizing any booking.
-- **Max 2 Slots Offered Guarantee**:
-  - Telephony callers suffer cognitive overload if presented with long lists. The slot generator and orchestrator strictly offer at most 2 options at a time.
-- **Doctor Dynamic Scheduling & Voice Agent Sync**:
-  - Doctors configure custom OPD consultation hours (e.g. 17:00 to 22:00 / 5 PM to 10 PM) via `PUT /api/doctors/:id/schedule`.
-  - The agent instantly absorbs new timings, rejects bookings outside doctor hours, and synchronizes connected doctor screens via SSE.
-- **Deterministic Natural Date Resolver (`date-resolver.ts`)**:
-  - Code-level resolution for Hindi/Hinglish relative date phrases (_kal_, _parson_, _aaj shaam_, _next Monday_) using `Asia/Kolkata` clinic timezone.
-- **Prompt Injection Defense & Medical Guardrails**:
-  - Unsanitized patient speech is treated as untrusted input; sanitized through strict regex guards and Zod validators.
-  - Zero medical advice: hardcoded regex intercept triggers immediate 108 emergency escalation for life-threatening symptoms (_chest pain_, _saans nahi aa rahi_, _behosh_).
-
----
-
-## Phase 3: Gnani Adapters, Resilience & Cost Metering Highlights
-
-- **Complete Gnani API & Evon Documentation**:
-  - Detailed endpoints, authentication, streaming protocols, audio specs, and credits in [`docs/gnani-notes.md`](docs/gnani-notes.md).
-  - Production GPU sizing, vLLM / OpenAI-compatible hosting, and Docker setup for Evon 30B in [`docs/evon-hosting.md`](docs/evon-hosting.md).
-- **Provider-Agnostic Model Interfaces**:
-  - `SttProvider`: audio buffer / stream $\rightarrow$ partial & final transcripts with confidence scores.
-  - `TtsProvider`: text $\rightarrow$ 16kHz PCM WAV audio buffer and async streaming chunks.
-  - `LlmProvider`: messages + tools $\rightarrow$ conversational response and validated tool calls.
-- **Dual Adapter Architecture (In-Memory Mock + Production Gnani)**:
-  - `MockSttAdapter`, `MockTtsAdapter`, `MockLlmAdapter`: Zero-credit in-memory mock adapters active by default for test & local dev.
-  - `GnaniSttAdapter`, `GnaniTtsAdapter`, `EvonOpenAiLlmAdapter`: Production adapters connecting to `api.vachana.ai` and OpenAI-compatible Evon endpoints.
-- **Circuit Breaker Pattern**:
-  - State machine (`CLOSED`, `OPEN`, `HALF_OPEN`) tracking consecutive failures per service.
-  - Automatically trips after 3 failures to fast-fail subsequent requests and protect credit budget during outages.
-- **Idempotency-Aware Bounded Retries**:
-  - **NON-NEGOTIABLE RULE**: Exponential backoff with jitter applied **strictly to idempotent calls only** (STT/TTS/read queries); non-idempotent operations (such as booking commits) execute with **0 retries** to prevent double mutation.
-- **Per-Call & Daily Cost Metering**:
-  - Tracks and enforces 50 credits/call, 2,000 credits/day, and 5,000 total budget caps. Emits structured JSON audit logs.
-- **End-to-End Voice Pipeline Smoke Test**:
-  - Run via `npm run smoke:voice`: sends a live Hinglish sentence through STT $\rightarrow$ LLM $\rightarrow$ TTS, and outputs step-by-step latency & credit reports.
-
----
-
-## Phase 2: Database and Booking Core Highlights
-
-- **8 Relational Tables on PostgreSQL (Drizzle ORM & SQL Migrations)**:
-  - `doctors`: Doctor roster, specialty, IST working hours (`09:00`-`18:00`), active days.
-  - `appointment_types`: Visit types (`general_consultation` 30m, `follow_up` 15m, `comprehensive_checkup` 45m).
-  - `patients`: Patient directory with encrypted/masked phone numbers (`+91 ******3210`).
-  - `appointments`: Confirmed appointments with UTC storage, partial unique index `uq_active_doctor_slot`, and idempotency keys.
-  - `slot_holds`: 2-minute auto-expiring temporary holds for active callers.
-  - `calls`: Telephony call logs with credit tracking and outcomes.
-  - `outbox`: Transactional outbox pattern for reliable async messaging.
-  - `callback_requests`: Graceful fallback tickets for receptionist follow-up.
-- **Zero Double-Booking Guarantee (PostgreSQL Partial Unique Index)**:
-  ```sql
-  CREATE UNIQUE INDEX uq_active_doctor_slot
-  ON appointments (doctor_id, slot_start)
-  WHERE status = 'CONFIRMED';
-  ```
-- **UTC Storage & Asia/Kolkata Display**: Stored in UTC (`TIMESTAMPTZ`) for universal consistency; converted and displayed in `Asia/Kolkata` (IST, UTC+05:30) for Hinglish speech generation and doctor OPD screens.
-- **Pure Slot Generator**: Fully deterministic, side-effect-free algorithm computing valid intervals from working hours, visit durations, confirmed appointments, and unexpired holds.
-- **5 Core Service Functions**:
-  - `checkSlots(doctorId, date, appointmentTypeId)`
-  - `holdSlot(input)` (2-minute auto-expiring hold)
-  - `bookAppointment(input)` (single transaction, requires idempotency key, releases hold, enforces unique constraint, logs to outbox)
-  - `cancelAppointment(appointmentId, reason)` (frees slot for new bookings)
-  - `rescheduleAppointment(appointmentId, newDate, newTime)` (atomic move to new slot)
-- **High Concurrency Tested**: Verified by a concurrency test firing **50 simultaneous bookings** against Neon for the same slot: **exactly 1 succeeds, exactly 49 are safely rejected with `SLOT_ALREADY_BOOKED`**.
-
----
-
-## Architecture Overview
-
-For the detailed Mermaid architecture diagram and Master Context data flow, see [ARCHITECTURE.md](ARCHITECTURE.md).
-
-```
-Patient Voice ──> Gnani Prisma STT (v3.0) ──> Code-Level Emergency Scanner
-                                                      │
-              ┌───────────────────────────────────────┴───────────────────────────────────────┐
-              ▼ (Emergency)                                                                   ▼ (Routine Query)
-      Hardcoded 108 Escalation                                                        Evon 30B LLM (Reasoning)
-              │                                                                               │
-              ▼                                                                               ▼
-     Gnani Timbre TTS (Shivani)                                                       Validated Tool Calls
-              │                                                                               │
-              ▼                                                                               ▼
-       Patient Audio                                                             Neon PostgreSQL (Transaction)
-                                                                                              │
-                                                                                              ├─> Instant SSE Broadcast ─> Doctor Dashboard
-                                                                                              └─> Confirmed Speech Output ─> Patient Audio
+    K --> P["Gnani Timbre TTS"]
+    G --> P
+    P --> Q["Patient Audio Response"]
 ```
 
+### Voice Processing Pipeline
+
+The voice pipeline follows these steps:
+
+1. **Audio Capture:** The browser captures microphone audio and streams 16 kHz PCM audio chunks.
+2. **Voice Activity Detection:** Local RMS-based VAD detects speech and silence.
+3. **Speech Recognition:** Gnani Prisma STT converts speech into text.
+4. **Emergency Screening:** A deterministic emergency scanner checks for critical symptoms.
+5. **Conversation Reasoning:** Evon 30B processes the patient's intent and determines the next conversational action.
+6. **Tool Execution:** Validated tool calls interact with the appointment management services.
+7. **Database Transaction:** The booking service checks availability and commits the appointment.
+8. **Speech Generation:** Gnani Timbre TTS converts the response into natural speech.
+9. **Audio Streaming:** The generated response is streamed back to the patient.
+10. **Dashboard Synchronization:** The transactional outbox publishes events to the doctor's dashboard through SSE.
+
+### Conversation State Machine
+
+The conversation is controlled through an explicit finite state machine.
+
+```mermaid
+stateDiagram-v2
+    [*] --> GREETING_CONSENT
+    GREETING_CONSENT --> UNDERSTAND_INTENT
+    UNDERSTAND_INTENT --> COLLECT_DETAILS
+    COLLECT_DETAILS --> OFFER_SLOTS
+    OFFER_SLOTS --> CONFIRM_READBACK
+    CONFIRM_READBACK --> BOOKED
+    UNDERSTAND_INTENT --> RESCHEDULE
+    UNDERSTAND_INTENT --> CANCEL
+    UNDERSTAND_INTENT --> ESCALATE
+    UNDERSTAND_INTENT --> FALLBACK
+    BOOKED --> [*]
+    RESCHEDULE --> [*]
+    CANCEL --> [*]
+    ESCALATE --> [*]
+    FALLBACK --> [*]
+```
+
+The LLM is responsible for natural conversational responses, while the application state machine and validated backend tools control actual operations.
+
 ---
 
-## Monorepo Layout
+## 🛠️ Technology Stack
 
-```
-appointly/
+| Layer | Technologies |
+|---|---|
+| Backend | Node.js, TypeScript |
+| Voice Recognition (STT) | Gnani Prisma |
+| Voice Generation (TTS) | Gnani Timbre |
+| Conversational Intelligence | Evon 30B |
+| Real-Time Communication | WebSockets, SSE |
+| Database | PostgreSQL, Neon Serverless |
+| ORM | Drizzle ORM |
+| Validation | Zod |
+| Authentication | JWT, HMAC-SHA256, Google OAuth |
+| Monitoring | Prometheus, Structured Logging |
+| Testing | Vitest |
+| Containerization | Docker, Docker Compose |
+| CI/CD | GitHub Actions |
+
+---
+
+## 📂 Project Structure
+
+```text
+Appointly/
+│
 ├── apps/
-│   ├── api/                  # Stateless Voice AI Backend (Node.js/TypeScript)
-│   └── dashboard/            # Minimalist Doctor Dashboard (Live SSE, OPD Roster, Simulator)
+│   ├── api/
+│   │   ├── src/
+│   │   │   ├── agent/
+│   │   │   │   └── orchestrator.ts
+│   │   │   ├── auth/
+│   │   │   ├── database/
+│   │   │   ├── providers/
+│   │   │   ├── services/
+│   │   │   ├── routes/
+│   │   │   ├── observability/
+│   │   │   └── index.ts
+│   │   └── tests/
+│   │
+│   └── dashboard/
+│       └── Doctor Dashboard
+│
 ├── packages/
-│   └── shared/               # Shared domain types, Zod validation schemas & clinic constants
-├── docs/adr/                 # Architecture Decision Records (ADR-001 to ADR-010)
-├── .github/workflows/ci.yml  # GitHub Actions CI (lint, typecheck, test, audit, gitleaks)
-├── Makefile                  # Developer workflow automation
-├── neon.ts                   # Neon project configuration & branch policy
-├── ARCHITECTURE.md           # Master Context architectural specification & data flow
+│   └── shared/
+│       └── Shared types, validation schemas
+│
+├── docs/
+│   ├── adr/
+│   ├── eval-report.md
+│   ├── latency.md
+│   ├── load-test.md
+│   ├── slo.md
+│   ├── threat-model.md
+│   ├── gnani-notes.md
+│   └── demo-script.md
+│
+├── scripts/
+│   ├── migrate.ts
+│   ├── seed.ts
+│   ├── eval-harness.ts
+│   ├── preflight-check.ts
+│   └── smoke-voice-pipeline.ts
+│
+├── public/
+│
+├── .github/
+│   └── workflows/
+│
+├── .env.example
+├── ARCHITECTURE.md
+├── Dockerfile
+├── docker-compose.yml
+├── Makefile
+├── package.json
 └── README.md
 ```
 
 ---
 
-## Quickstart & Setup Steps
+## 🚀 Getting Started
 
-### 1. Fresh Clone & Installation
+Follow these instructions to run Appointly locally.
+
+### Prerequisites
+
+Make sure you have the following installed:
+
+- Node.js and npm.
+- Git.
+- PostgreSQL or a Neon PostgreSQL database (for persistent database mode).
+- Docker and Docker Compose (optional).
+- Gnani API credentials (for real STT and TTS).
+- Evon 30B running through an OpenAI-compatible local endpoint or configured provider.
+- Google OAuth Client ID (for Google doctor authentication).
+
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/Pratyaksh0x1/Appointly.git
+
 cd Appointly
+```
+
+### 2. Install Dependencies
+
+```bash
 npm install
 ```
 
-### 2. Configure Environment
+### 3. Configure Environment Variables
 
-Copy `.env.example` to `.env`:
+Create a `.env` file from the example configuration.
 
 ```bash
 cp .env.example .env
 ```
 
-Fill in your configuration or use the provisioned Neon connection:
+Configure the following variables:
 
-```ini
+```env
+# Server
 PORT=3000
-DATABASE_URL="postgresql://neondb_owner:...@ep-little-credit-bdwt1fpl-pooler.c-8.us-east-2.aws.neon.tech/neondb?sslmode=require"
-DATABASE_URL_UNPOOLED="postgresql://neondb_owner:...@ep-little-credit-bdwt1fpl.c-8.us-east-2.aws.neon.tech/neondb?sslmode=require"
-GNANI_API_KEY=your_gnani_api_key_here
-EVON_API_KEY=your_evon_api_key_here
+NODE_ENV=development
+LOG_LEVEL=info
+
+# Database
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/appointly
+
+# Use in-memory database for local testing
+USE_IN_MEMORY_DB=true
+
+# Gnani STT & TTS
+GNANI_API_KEY=your_gnani_api_key
+
+GNANI_STT_URL=https://api.vachana.ai/stt/v3
+GNANI_STT_MODEL=prisma-v3.0
+GNANI_STT_LANGUAGE=indic-auto
+
+GNANI_TTS_URL=https://api.vachana.ai/api/v1/tts/inference
+GNANI_TTS_MODEL=timbre-v3.0
+GNANI_TTS_VOICE=Shivani
+GNANI_TTS_LANGUAGE=hi-IN
+
+# Evon LLM
+EVON_BASE_URL=http://localhost:11434/v1
+EVON_MODEL=evon-30b
+EVON_API_KEY=
+
+# Google OAuth
+GOOGLE_CLIENT_ID=your_google_client_id
+
+# Mock Services
 USE_MOCK_SERVICES=true
+
+# Credit Management
+TOTAL_CREDIT_BUDGET=5000
+PER_CALL_CREDIT_LIMIT=50
+DAILY_CREDIT_LIMIT=2000
+
+# Retry Configuration
+HTTP_TIMEOUT_MS=8000
+MAX_RETRIES=3
+BACKOFF_BASE_MS=500
 ```
 
-### 3. Run Build, Lint & Tests
+Refer to `.env.example` for the complete configuration, including WebSocket endpoints, additional provider settings, and other runtime options.
+
+**Important:** The example above is for local development. For persistent database usage, configure a valid PostgreSQL/Neon connection and disable the in-memory database mode. Configure real provider credentials when switching off mock services.
+
+Never commit your `.env` file or expose API keys in the frontend.
+
+### 4. Run Database Migrations
+
+For persistent PostgreSQL mode:
 
 ```bash
-# Typecheck all packages
-npm run typecheck
-
-# Code formatting and linting
-npm run lint
-
-# Run all 162 Vitest unit, state machine, latency, lifecycle & concurrency tests across 20 test suites
-npm test
-
-# Run conversational eval harness (61 Hinglish clinical scenarios)
-npm run eval
-
-# Run one-command preflight verification (DB connection, HTTP routes, eval harness)
-npm run preflight
-
-# Run database migration & seed on Neon
 npm run migrate
-npx tsx scripts/seed.ts
 ```
 
-### 4. Docker Deployment (Optional)
-
-Run the full stack with zero local dependencies:
+Seed the initial clinic and doctor data:
 
 ```bash
-docker compose up --build
+npm run seed
 ```
 
 ### 5. Start the Development Server
@@ -318,55 +457,324 @@ docker compose up --build
 npm run dev
 ```
 
-Open **[http://localhost:3000](http://localhost:3000)** in your browser to view the Minimalist Doctor Dashboard with real-time SSE updates and the live voice assistant simulator.
+The application runs at:
 
-See [`docs/demo-script.md`](docs/demo-script.md) for a step-by-step hackathon demonstration guide.
+```text
+http://localhost:3000
+```
 
----
+Open the URL in your browser to access the doctor dashboard.
 
-## Endpoints Reference
+The voice testing interface is available at:
 
-| Endpoint                           | Method    | Purpose                                                                                                                               |
-| :--------------------------------- | :-------- | :------------------------------------------------------------------------------------------------------------------------------------ |
-| `/healthz`                         | GET       | Liveness probe (returns HTTP 200 `{ status: "ok" }`)                                                                                  |
-| `/readyz`                          | GET       | Readiness probe (verifies database connectivity and returns status)                                                                   |
-| `/health`                          | GET       | Detailed health check (database status, doctors loaded, credit budget summary)                                                        |
-| `/metrics`                         | GET       | Prometheus exposition metrics (v0.0.4) for calls, latencies, bookings, and SLOs                                                       |
-| `/api/metrics`                     | GET       | Real-time JSON telemetry stream for dashboard charts and percentiles                                                                  |
-| `/api/alerts`                      | GET       | Real-time AlertEngine monitor for error rate and latency breaches                                                                     |
-| `/api/config/auth`                 | GET       | Public auth configuration exposing Google OAuth Client ID                                                                              |
-| `/api/clinic/profile`              | GET       | Retrieves clinic information, operating hours, and active doctor roster                                                               |
-| `/api/clinic/onboarding`           | POST      | One-time setup wizard saving clinic hours, doctor count, consultation timings, slot durations, and fees                               |
-| `/api/clinic/settings`             | PUT       | Customizes clinic profile and doctor schedule anytime from doctor settings                                                            |
-| `/api/auth/google`                 | POST      | Doctor login via Google Identity Services token                                                                                       |
-| `/api/auth/dev-login`              | POST      | One-click doctor demo login for offline testing and hackathon judging                                                                 |
-| `/api/doctors`                     | GET       | Lists clinic doctors, specialties, fees, and consultation durations                                                                   |
-| `/api/doctors/:id/schedule`        | PUT, POST | Updates doctor's OPD timing (e.g. 17:00 to 22:00) and broadcasts live SSE event to doctor dashboards                                  |
-| `/api/slots`                       | GET       | Retrieves open slots for a doctor on a specific date (`?doctorId=dr_sharma&date=YYYY-MM-DD`)                                          |
-| `/api/appointments`                | GET       | Protected doctor route: retrieves all confirmed appointments with filtering                                                           |
-| `/api/appointments/:id/reschedule` | PUT       | Protected doctor route: reschedules an existing appointment                                                                           |
-| `/api/appointments/:id/cancel`     | PUT       | Protected doctor route: cancels an appointment and frees the slot                                                                     |
-| `/api/appointments/:id/complete`   | PUT       | Protected doctor route: marks consultation completed                                                                                  |
-| `/api/callbacks`                   | GET       | Protected doctor route: retrieves saved receptionist callback tickets                                                                 |
-| `/api/callbacks/:id/resolve`       | PUT       | Protected doctor route: marks a callback request resolved                                                                             |
-| `/api/calls`                       | GET       | Protected doctor route: retrieves doctor call summaries with verbatim non-diagnostic patient concerns                                 |
-| `/api/cost`                        | GET       | Live cost meter metrics against the 5,000 credit budget                                                                               |
-| `/api/voice/session`               | POST      | Generates short-lived, rate-limited single-use token (`vtok_...`) for secure WebSocket authentication                                 |
-| `/api/voice/latency`               | GET       | Retrieves real-time P50 and P95 latency percentiles across STT, LLM TTFT, TTS, and total voice turns                                  |
-| `/voice-test.html`                 | GET       | Live Voice Agent testing interface with microphone capture, real-time waveform states, transcript, and latency telemetry debug        |
-| `/ws/voice`                        | WebSocket | Authenticated full-duplex voice pipeline (PCM audio in $\rightarrow$ VAD $\rightarrow$ STT $\rightarrow$ Brain $\rightarrow$ TTS out) |
-| `/api/chat`                        | POST      | Conversational endpoint (Emergency check $\rightarrow$ Evon LLM $\rightarrow$ Tool calling $\rightarrow$ Neon DB transaction)         |
-| `/api/dashboard/stream`            | GET       | Server-Sent Events (SSE) stream for real-time doctor dashboard updates (appointments, alerts, callbacks, summaries)                   |
+```text
+http://localhost:3000/voice-test.html
+```
+
+### 6. Run with Docker
+
+You can also run the application using Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+To stop the containers:
+
+```bash
+docker compose down
+```
 
 ---
 
-## Non-Negotiable Rules Compliance
+## 🧪 Testing & Development
 
-1. **Rule 1 (LLM Never Writes to DB)**: LLM only emits validated tool arguments. Database operations execute via strict serializable transactions.
-2. **Rule 2 (Zero Double-Booking)**: Enforced via PostgreSQL `CONSTRAINT uq_doctor_appointment_slot UNIQUE (doctor_id, appointment_date, start_time)` and `idempotency_key`. The agent confirms booking only after commit.
-3. **Rule 3 (No Secrets in Code/Frontend)**: Fail-fast Zod startup validation; secrets stripped before serving configuration.
-4. **Rule 4 (Safety & Emergency Triage)**: Deterministic code-level regex filter intercepts medical emergencies (chest pain, breathing arrest, stroke) and immediately triggers 108 escalation in Hinglish.
-5. **Rule 5 (Resilience & Retries)**: 8,000ms timeouts, 3 retries with exponential backoff & jitter, and automatic receptionist callback ticket creation upon failure.
-6. **Rule 6 (Pino-Style JSON Logging & Redaction)**: Structured JSON with `call_id` and `request_id`. Automatically masks phone numbers (`+91 ******3210`), patient names, and redacts all secrets.
-7. **Rule 7 (5,000 Credit Budget Limiter)**: Enforces 50 credit/call and 2,000 credit/day limits. Mock mode enables testing with 0 credits burned.
-8. **Rule 8 (Clean Modules & ADRs)**: Documented in [docs/adr/](docs/adr/).
+Appointly provides several commands for development and quality assurance.
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Start development server |
+| `npm run build` | Build application workspaces |
+| `npm run start` | Start production server |
+| `npm run typecheck` | Run TypeScript checks |
+| `npm run lint` | Run type checks and formatting validation |
+| `npm run format` | Format project files |
+| `npm run format:check` | Check formatting |
+| `npm test` | Run automated tests |
+| `npm run test:watch` | Run tests in watch mode |
+| `npm run eval` | Run conversational evaluation harness |
+| `npm run smoke:voice` | Test the voice processing pipeline |
+| `npm run preflight` | Run preflight verification |
+| `npm run audit` | Audit dependencies |
+| `npm run chat:cli` | Start CLI-based conversational testing |
+
+### Test Scenarios
+
+The evaluation harness covers nine major categories:
+
+1. Direct appointment bookings.
+2. Preferred time-slot selection.
+3. Unavailable appointment slots.
+4. Appointment rescheduling.
+5. Appointment cancellation.
+6. Ambiguous time interpretation.
+7. Medical emergency handling.
+8. Prompt injection protection.
+9. Off-topic conversation handling.
+
+Additional automated tests cover concurrency, authentication, appointment lifecycle, voice processing, and system resilience.
+
+---
+
+## 🔌 API Reference
+
+Appointly exposes REST APIs, WebSocket communication, and Server-Sent Events.
+
+### Health & Monitoring
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/healthz` | Liveness check |
+| GET | `/readyz` | Readiness check |
+| GET | `/health` | Detailed application health |
+| GET | `/metrics` | Prometheus metrics |
+| GET | `/api/metrics` | JSON telemetry |
+| GET | `/api/alerts` | System alerts |
+
+### Authentication
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/config/auth` | Public authentication configuration |
+| POST | `/api/auth/google` | Google authentication |
+| POST | `/api/auth/dev-login` | Development demo login |
+
+### Clinic & Doctor Management
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/clinic/profile` | Retrieve clinic information |
+| POST | `/api/clinic/onboarding` | Configure initial clinic setup |
+| PUT | `/api/clinic/settings` | Update clinic configuration |
+| GET | `/api/doctors` | Retrieve doctor roster |
+| PUT/POST | `/api/doctors/:id/schedule` | Update doctor schedule |
+
+### Appointment Management
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/slots` | Retrieve available slots |
+| GET | `/api/appointments` | Retrieve appointments |
+| PUT | `/api/appointments/:id/reschedule` | Reschedule appointment |
+| PUT | `/api/appointments/:id/cancel` | Cancel appointment |
+| PUT | `/api/appointments/:id/complete` | Complete appointment |
+
+### Voice & Conversation
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| POST | `/api/voice/session` | Generate secure voice session token |
+| POST | `/api/chat` | Process conversational requests |
+| GET | `/api/voice/latency` | Retrieve voice latency metrics |
+| GET | `/voice-test.html` | Voice testing interface |
+| WebSocket | `/ws/voice` | Bidirectional audio streaming |
+| GET | `/api/dashboard/stream` | Real-time dashboard SSE stream |
+
+### Callback & Call Management
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/callbacks` | Retrieve callback requests |
+| PUT | `/api/callbacks/:id/resolve` | Resolve callback request |
+| GET | `/api/calls` | Retrieve AI call summaries |
+| GET | `/api/cost` | Retrieve credit consumption |
+
+---
+
+## 🗄️ Database Design
+
+Appointly uses PostgreSQL with Drizzle ORM and SQL migrations.
+
+The database is organized around eight core relational tables.
+
+| Table | Responsibility |
+|---|---|
+| `doctors` | Doctor profiles, specialties, OPD hours |
+| `appointment_types` | Consultation types and durations |
+| `patients` | Patient information |
+| `appointments` | Confirmed appointments |
+| `slot_holds` | Temporary appointment reservations |
+| `calls` | Voice call records and outcomes |
+| `outbox` | Reliable asynchronous event delivery |
+| `callback_requests` | Receptionist follow-up requests |
+
+### Preventing Double Bookings
+
+One of Appointly's most important design decisions is preventing two patients from booking the same doctor and time slot.
+
+The system uses PostgreSQL constraints, transactional booking logic, and idempotency keys.
+
+An active-slot uniqueness constraint ensures that only one confirmed appointment can occupy a doctor’s slot.
+
+```sql
+CREATE UNIQUE INDEX uq_active_doctor_slot
+ON appointments (doctor_id, slot_start)
+WHERE status = 'CONFIRMED';
+```
+
+The booking workflow also uses temporary slot holds and atomic transactions.
+
+This ensures that concurrent requests cannot silently create duplicate confirmed bookings.
+
+### Transactional Outbox Pattern
+
+Appointly uses a transactional outbox to ensure that database changes and event publishing remain reliable.
+
+1. Appointment changes are committed to PostgreSQL.
+2. The corresponding event is stored in the outbox.
+3. A background relay processes pending events.
+4. The event is broadcast to connected dashboards.
+5. Failed events are retried and eventually moved to dead-letter status when retry limits are exceeded.
+
+---
+
+## 🔒 Security & Privacy
+
+Appointly incorporates multiple security measures:
+
+- Sensitive API credentials remain server-side.
+- Doctor APIs require authentication.
+- WebSocket connections use short-lived, single-use tokens.
+- Input is validated and sanitized.
+- Mutating requests support idempotency protection.
+- Request rate limits help prevent abuse.
+- Logs automatically redact sensitive information.
+- Raw microphone audio is processed in memory rather than persisted as audio files by default.
+- Transcript retention is configurable.
+- Database runtime roles follow the principle of least privilege.
+- Appointment rescheduling and cancellation require caller verification.
+
+The project also documents its security threat model and database role architecture.
+
+---
+
+## 📈 Performance & Reliability
+
+Appointly incorporates performance targets and resilience mechanisms into its architecture.
+
+| Metric / Mechanism | Target or Design |
+|---|---|
+| Dashboard availability SLO | 99.9% target |
+| Voice turn latency | P95 under 2 seconds target |
+| Temporary slot hold | 2 minutes |
+| Default API rate limit | 120 requests/minute |
+| Voice session token | Single-use, 10 minutes |
+| Transcript retention | 30 days by default |
+| Maximum credit budget | 5,000 credits |
+| Per-call credit limit | 50 credits |
+| Daily credit limit | 2,000 credits |
+
+These are project-defined targets and configuration defaults, not a guarantee of production service availability or performance.
+
+For detailed measurements, see the benchmark and SLO documentation.
+
+---
+
+## 📚 Documentation
+
+Additional technical documentation is available in the `docs/` directory.
+
+| Document | Description |
+|---|---|
+| `ARCHITECTURE.md` | System architecture and data flow |
+| `docs/adr/` | Architecture Decision Records |
+| `docs/latency.md` | Voice pipeline latency benchmarks |
+| `docs/load-test.md` | Concurrent load and resilience tests |
+| `docs/slo.md` | Service Level Objectives |
+| `docs/threat-model.md` | Security threat analysis |
+| `docs/db-roles.md` | Database role architecture |
+| `docs/gnani-notes.md` | Gnani API integration notes |
+| `docs/evon-hosting.md` | Evon model hosting guidance |
+| `docs/eval-report.md` | Conversational evaluation results |
+| `docs/demo-script.md` | Hackathon demonstration guide |
+
+---
+
+## 🔮 Future Scope
+
+Potential directions for extending Appointly include:
+
+- Multi-clinic and multi-location support.
+- Additional Indian regional languages.
+- WhatsApp appointment booking and reminders.
+- Integration with real telephony providers.
+- Automated prescription and medical-record workflows.
+- Advanced clinic analytics and reporting.
+- Calendar synchronization.
+- More configurable patient verification methods.
+- Expanded accessibility features.
+
+---
+
+## 🤝 Contributing
+
+Contributions, feature suggestions, and bug reports are welcome.
+
+1. Fork this repository.
+2. Create a new feature branch.
+
+```bash
+git checkout -b feature/your-feature-name
+```
+
+3. Make your changes.
+4. Run the tests and type checks.
+
+```bash
+npm run typecheck
+npm test
+```
+
+5. Commit your changes.
+
+```bash
+git commit -m "feat: add your feature"
+```
+
+6. Push your branch.
+
+```bash
+git push origin feature/your-feature-name
+```
+
+7. Open a Pull Request.
+
+---
+
+## 🏆 Project Information
+
+**Project:** Appointly
+
+**Category:** Healthcare Technology / Conversational AI / Voice AI
+
+**Focus:** AI-powered appointment management for small clinics.
+
+**Hackathon:** Gnani AI Hackathon
+
+**Database:** Neon Serverless PostgreSQL
+
+**License:** MIT
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.
+
+---
+
+<p align="center">
+  <b>Appointly — Making healthcare appointments as simple as having a conversation. 🏥</b>
+  <br/>
+  Built with ❤️ for smarter, more accessible healthcare.
+</p>
